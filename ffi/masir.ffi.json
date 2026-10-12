@@ -1,0 +1,124 @@
+{
+  "ffi_format": 7,
+  "functions": [
+    {
+      "name": "masirServe",
+      "symbol": "masir_serve",
+      "params": [
+        {
+          "callback": {
+            "id": "onRequest",
+            "params": [
+              "u32",
+              "u32",
+              "string",
+              {
+                "context": "onRequest"
+              }
+            ],
+            "returns": "void",
+            "lifetime": "retained",
+            "invoke": "foreign"
+          }
+        },
+        {
+          "context": "onRequest"
+        }
+      ],
+      "returns": "i32"
+    },
+    {
+      "name": "masirReply",
+      "symbol": "masir_reply",
+      "params": ["u32", "string"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirCall",
+      "symbol": "masir_call",
+      "params": ["string", "mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirEuid",
+      "symbol": "masir_euid",
+      "params": [],
+      "returns": "u32"
+    },
+    {
+      "name": "xrayGrpcCall",
+      "symbol": "xray_grpc_call",
+      "params": ["string", "string", "string", "mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "xrayGrpcLastError",
+      "symbol": "xray_grpc_last_error",
+      "params": ["mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptConfirm",
+      "symbol": "masir_prompt_confirm",
+      "params": ["string", "u32"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptSelect",
+      "symbol": "masir_prompt_select",
+      "params": ["string", "string", "i32"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptMultiselect",
+      "symbol": "masir_prompt_multiselect",
+      "params": ["string", "string", "string", "mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptText",
+      "symbol": "masir_prompt_text",
+      "params": ["string", "string", "mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptLiveSelectStart",
+      "symbol": "masir_prompt_live_select_start",
+      "params": ["string", "string", "i32"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptLiveSelectSet",
+      "symbol": "masir_prompt_live_select_set",
+      "params": ["i32", "string", "u32"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptLiveSelectPoll",
+      "symbol": "masir_prompt_live_select_poll",
+      "params": [],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptLiveSelectViewport",
+      "symbol": "masir_prompt_live_select_viewport",
+      "params": ["mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirTextVisual",
+      "symbol": "masir_text_visual",
+      "params": ["string", "mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirListProcesses",
+      "symbol": "masir_list_processes",
+      "params": ["mutable-bytes"],
+      "returns": "i32"
+    }
+  ],
+  "libraries": ["../native/lib/libmasir_ffi.a"],
+  "system_libraries": ["System", "iconv", "c", "m"],
+  "frameworks": ["CoreFoundation", "IOKit"]
+}

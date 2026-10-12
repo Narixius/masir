@@ -1,0 +1,12 @@
+node_modules/
+dist/
+native/lib/
+native/target/
+src/.scriptc/
+probe/
+*.dSYM/
+*.ll
+.DS_Store
+pnpm-lock.yaml
+.scriptc
+ffi/masir.ffi.linux.json

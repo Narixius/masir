@@ -1,0 +1,15 @@
+[package]
+name = "masir-transport"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "masir-dev-broker"
+path = "src/bin/masir-dev-broker.rs"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

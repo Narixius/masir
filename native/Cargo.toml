@@ -1,0 +1,12 @@
+[workspace]
+members = ["masir-transport", "masir-xray-grpc", "masir-ffi"]
+resolver = "3"
+
+[profile.release]
+# Never unwind across the FFI edge; panics are caught at each boundary instead.
+# Do NOT set panic = "abort": a staticlib linked into a C-ABI host needs the
+# unwinding runtime for catch_unwind to work.
+lto = true
+opt-level = "z"
+codegen-units = 1
+strip = true

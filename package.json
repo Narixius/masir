@@ -1,0 +1,46 @@
+{
+  "name": "masir-ts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript IPC client + daemon for masir, compiled to a native binary with scriptc. The transport is a Rust staticlib linked through scriptc's --ffi manifest.",
+  "type": "module",
+  "scripts": {
+    "build": "PROFILE=release scripts/build-native.sh && scripts/build.sh",
+    "dev": "scripts/dev.sh",
+    "cli": "tsx --import ./src/shim.dev.ts src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "coverage": "scripts/coverage.sh",
+    "acceptance": "scripts/acceptance.sh",
+    "clean": "rm -rf dist native/lib native/target",
+    "generate:protos": "scripts/generate-protos.sh",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "@bomb.sh/tab": "^0.0.22",
+    "@bufbuild/protobuf": "^2.16.0",
+    "@clack/core": "^1.5.1",
+    "@clack/prompts": "^1.8.1",
+    "@gozargah/xray-schema": "^0.0.27",
+    "@grpc/grpc-js": "^1.14.5",
+    "citty": "^0.2.2",
+    "env-paths": "^4.0.0",
+    "evlog": "^2.30.0",
+    "picocolors": "^1.1.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@evlog/cli": "^0.9.0",
+    "@types/node": "^24.0.0",
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
+    "ts-proto": "^2.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3",
+    "ultracite": "7.12.2"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621"
+}
