@@ -183,16 +183,14 @@ const processEntry = (program: string, entry: string): Check => {
 
 const listed = (values: readonly string[]): string => values.join(", ");
 
+const PROCESS_UNKNOWN = "process";
+
 /** Conditions that depend on who connects: unknown unless the query says. */
 const connectionChecks = (rule: Conditions, query: RouteQuery): Check[] => {
   const checks: Check[] = [];
   if (rule.process) {
     const { process: program } = query;
-    checks.push(
-      program === undefined
-        ? UNKNOWN(`only for ${listed(rule.process)} (try --process)`)
-        : anyOf(rule.process, (entry) => processEntry(program, entry), "process")
-    );
+    checks.push(program === undefined ? UNKNOWN(PROCESS_UNKNOWN) : anyOf(rule.process, (entry) => processEntry(program, entry), "process"));
   }
   if (rule.protocol) {
     const { protocol } = query;
@@ -284,18 +282,31 @@ const ruleLabel = (rule: TestedRule): string => (rule.position === undefined ? r
 export const testRoute = (rules: readonly TestedRule[], query: RouteQuery): RouteResult => {
   const isIp = isIpTarget(query.target);
   const notes: string[] = [];
+  let hasProcessRules = false;
+  const finish = (because: string[], matched?: TestedRule): RouteResult => {
+    if (hasProcessRules) {
+      notes.push("To check a process, use --process");
+    }
+    return { because, matched, notes };
+  };
   for (const rule of rules) {
     const verdict = judge(rule.conditions, query, isIp);
     if (verdict.state === "yes") {
-      return { because: verdict.because, matched: rule, notes };
+      return finish(verdict.because, rule);
     }
     if (verdict.state === "unknown") {
-      notes.push(`${ruleLabel(rule)} → ${rule.outboundTag} could apply first: ${verdict.unknown.join("; ")}`);
+      const otherUnknowns = verdict.unknown.filter((why) => why !== PROCESS_UNKNOWN);
+      if (otherUnknowns.length < verdict.unknown.length) {
+        hasProcessRules = true;
+      }
+      if (otherUnknowns.length > 0) {
+        notes.push(`${ruleLabel(rule)} → ${rule.outboundTag} could apply first: ${otherUnknowns.join("; ")}`);
+      }
     }
   }
   const ipRules = rules.filter((rule) => rule.position !== undefined && rule.conditions.ip !== undefined);
   if (!isIp && ipRules.length > 0) {
     notes.push(`xray also resolves ${query.target} and checks IP rules (${ipRules.map(ruleLabel).join(", ")}); test its IP to see those.`);
   }
-  return { because: [], notes };
+  return finish([]);
 };

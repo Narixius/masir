@@ -10,9 +10,8 @@ import { humanizeGeoValue } from "../../services/geo/geo.js";
 import { parseRule } from "../../services/rules/schema.js";
 import type { UserRule } from "../../services/rules/schema.js";
 import { withRuleInserted } from "../../services/rules/storage.js";
-import { log, note } from "../../utils/log.js";
+import { log } from "../../utils/log.js";
 import { multiselectPrompt, selectPrompt, textPrompt } from "../../utils/prompts.js";
-import { describeRule } from "./describe.js";
 import { pickDomains, pickIps, pickNetwork, pickPorts, pickProcesses, pickProtocols, pickSourceIps } from "./pickers.js";
 import { checkName, definedFields, resolveTarget, xrayRejection } from "./shared.js";
 import type { RuleInput, RuleTarget } from "./shared.js";
@@ -251,57 +250,24 @@ export interface WizardPreset {
   readonly target?: RuleTarget;
 }
 
-type ReviewChoice = "save" | "matches" | "target" | "name" | "cancel";
-
 /**
- * `masir rules add` in a terminal: ask for each part, review, check with xray,
- * return the rule (or `null` if cancelled). New rules go last; `rules edit`
+ * `masir rules add` in a terminal: ask for each part, validate with xray,
+ * and return the rule (or `null` if cancelled). New rules go last; `rules edit`
  * moves them.
  */
 export const runAddWizard = async (existing: readonly UserRule[], preset: WizardPreset): Promise<WizardResult | null> => {
-  let matchers = await chooseMatchers({});
-  let target = preset.target ?? (await askTarget());
-  let name = preset.name ?? (await chooseName(suggestName(matchers, target, existing), existing));
+  const matchers = await chooseMatchers({});
+  const target = preset.target ?? (await askTarget());
+  const name = preset.name ?? (await chooseName(suggestName(matchers, target, existing), existing));
   const createdAt = Date.now();
 
-  for (;;) {
-    const built = candidate(name, matchers, target, createdAt);
-    let choice: ReviewChoice;
-    if (built.ok) {
-      const placed = existing.length + 1;
-      note(describeRule(built.rule, placed).join("\n"), "Review");
-      // oxlint-disable-next-line eslint/no-await-in-loop
-      choice = await selectPrompt<ReviewChoice>({
-        message: "Save this rule?",
-        options: [
-          { label: "Save", value: "save" },
-          { label: "Change what it matches", value: "matches" },
-          { label: "Change where traffic goes", value: "target" },
-          { label: "Rename", value: "name" },
-          { label: "Cancel", value: "cancel" },
-        ],
-      });
-    } else {
-      log.error(pc.red(`The rule isn't complete yet:\n${built.error}`));
-      choice = "matches";
-    }
-
-    if (choice === "save" && built.ok) {
-      if (xrayRejection(withRuleInserted(existing, built.rule)) === null) {
-        return { rule: built.rule };
-      }
-    } else if (choice === "cancel") {
-      log.info("Cancelled; nothing was saved.");
-      return null;
-    } else if (choice === "matches") {
-      // oxlint-disable-next-line eslint/no-await-in-loop
-      matchers = await chooseMatchers(matchers);
-    } else if (choice === "target") {
-      // oxlint-disable-next-line eslint/no-await-in-loop
-      target = await askTarget(target);
-    } else if (choice === "name") {
-      // oxlint-disable-next-line eslint/no-await-in-loop
-      name = await chooseName(name, existing);
-    }
+  const built = candidate(name, matchers, target, createdAt);
+  if (!built.ok) {
+    log.error(pc.red(`The rule is not valid:\n${built.error}`));
+    return null;
   }
+  if (xrayRejection(withRuleInserted(existing, built.rule)) !== null) {
+    return null;
+  }
+  return { rule: built.rule };
 };

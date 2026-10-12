@@ -1,20 +1,20 @@
 import { defineCommand } from "citty";
+import pc from "picocolors";
 
 import { parseRule } from "../../services/rules/schema.js";
 import type { RawRule, UserRule, XrayRuleJson } from "../../services/rules/schema.js";
 import { insertRule, loadRules, withRuleInserted } from "../../services/rules/storage.js";
 import { setExitCode } from "../../utils/exit-code.js";
-import { note } from "../../utils/log.js";
 import { textPrompt } from "../../utils/prompts.js";
-import { describeRule } from "./describe.js";
+import { coloredTarget, matcherTreeItems } from "./describe.js";
 import {
   addProcesses,
-  applyToDaemon,
   checkName,
   definedFields,
   fail,
   MATCHER_ARGS,
   parseJsonRule,
+  reloadDaemon,
   resolveAppProcesses,
   resolveTarget,
   ruleFromFlags,
@@ -112,6 +112,20 @@ const wizardPreset = async (args: AddArgs, existing: readonly UserRule[]): Promi
   return { ok: true, value: { name, target } };
 };
 
+const reportRuleAdded = (rule: UserRule): void => {
+  const reload = reloadDaemon();
+  const reloadMsg = reload.ok ? pc.dim(`(${reload.message})`) : pc.yellow(`(${reload.message})`);
+  const header = `${pc.green("✔")} Rule "${pc.bold(rule.name)}" ${pc.dim("→")} ${coloredTarget(rule)} added ${reloadMsg}`;
+  const lines = [header];
+  const items = matcherTreeItems(rule.rule);
+  for (const [i, item] of items.entries()) {
+    const isLast = i === items.length - 1;
+    const branch = isLast ? pc.dim("└─") : pc.dim("├─");
+    lines.push(`  ${branch} ${pc.gray(`${item.label}:`)} ${item.value}`);
+  }
+  console.log(lines.join("\n"));
+};
+
 const addWithWizard = async (args: AddArgs, existing: readonly UserRule[]): Promise<void> => {
   const preset = await wizardPreset(args, existing);
   if (!preset.ok) {
@@ -128,9 +142,7 @@ const addWithWizard = async (args: AddArgs, existing: readonly UserRule[]): Prom
     fail(error instanceof Error ? error.message : String(error));
     return;
   }
-  const placed = loadRules().findIndex((stored) => stored.name === result.rule.name) + 1;
-  note(describeRule(result.rule, placed).join("\n"), "Rule added");
-  applyToDaemon();
+  reportRuleAdded(result.rule);
 };
 
 export const rulesAddCommand = defineCommand({
@@ -168,8 +180,6 @@ export const rulesAddCommand = defineCommand({
       fail(error instanceof Error ? error.message : String(error));
       return;
     }
-    const placed = loadRules().findIndex((stored) => stored.name === rule.name) + 1;
-    note(describeRule(rule, placed).join("\n"), "Rule added");
-    applyToDaemon();
+    reportRuleAdded(rule);
   },
 });

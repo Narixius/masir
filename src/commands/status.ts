@@ -5,6 +5,7 @@ import p from "../../package.json";
 import { loadSettings } from "../config/settings.js";
 import type { Settings } from "../config/settings.js";
 import type { ResponseOf, StatusResult } from "../protocol.js";
+import { checkXrayVersion, MIN_XRAY_VERSION } from "../services/xray-updater.js";
 import { checkHandlerInfo } from "../utils/handler.js";
 import { callHelper } from "../utils/ipc.js";
 import { runConnectivityChecks } from "./connectivity.js";
@@ -109,11 +110,28 @@ interface StatusJson {
     readonly uptimeSeconds?: number;
   };
   readonly settings: {
+    readonly routingMode: "proxy" | "direct";
     readonly mixedPort: number;
     readonly apiPort: number;
     readonly dnsServers: readonly string[];
   };
 }
+
+const formatRoutingMode = (settings: Settings): string => {
+  const mode = settings.routingMode === "direct" ? pc.bold(pc.green("direct")) : pc.bold(pc.cyan("proxy"));
+  return `${pc.bold("Routing Mode:")} ${mode} ${pc.dim("(default catch-all)")}`;
+};
+
+const formatXrayVersionHint = (settings: Settings): string | null => {
+  const check = checkXrayVersion(settings.xrayExecutable);
+  if (check.status === "missing") {
+    return `${pc.bold("Xray Binary:")} ${pc.yellow("not found")} ${pc.dim(`(install with \`masir update xray-core\`)`)}`;
+  }
+  if (check.status === "outdated") {
+    return `${pc.bold("Xray Binary:")} ${pc.yellow(`v${check.version} is older than v${MIN_XRAY_VERSION}`)} ${pc.dim(`(run \`masir update xray-core\`)`)}`;
+  }
+  return null;
+};
 
 const resolveDaemon = (status: StatusResult | null, now: number): ResolvedDaemon => {
   const daemon = status?.daemon;
@@ -211,12 +229,13 @@ const formatXrayRunning = (xray: ResolvedXray, settings: Settings): string => {
   const modeLabel =
     xray.mode === "tun" ? `${pc.bold(pc.green("TUN"))} ${pc.dim("(system-wide routing)")}` : `${pc.bold(pc.blue("Mixed Proxy"))}`;
 
-  const items: string[] = [`${pc.bold("Mode:")} ${modeLabel}`];
-  items.push(
+  const items: string[] = [
+    `${pc.bold("Mode:")} ${modeLabel}`,
+    formatRoutingMode(settings),
     `${pc.bold("Proxy Port:")} ${pc.bold(String(settings.mixedPort))} ${pc.dim("(Socks5/HTTP)")}`,
     `${pc.bold("API Port:")} ${pc.bold(String(xray.apiPort ?? settings.apiPort))} ${pc.dim("(xray-core gRPC)")}`,
-    `${pc.bold("DNS:")} ${pc.bold(settings.dnsServers.join(", "))}`
-  );
+    `${pc.bold("DNS:")} ${pc.bold(settings.dnsServers.join(", "))}`,
+  ];
 
   if (xray.startedAt && xray.uptimeMs !== undefined) {
     items.push(`${pc.bold("Uptime:")} ${pc.bold(formatDuration(xray.uptimeMs))} ${pc.dim(`(since ${formatTimestamp(xray.startedAt)})`)}`);
@@ -235,10 +254,14 @@ const formatXrayRunning = (xray: ResolvedXray, settings: Settings): string => {
 
 const formatXrayInactive = (xray: ResolvedXray, settings: Settings, daemonRunning: boolean): string => {
   const title = pc.bold(`Xray Core`);
+  const versionHint = formatXrayVersionHint(settings);
   if (xray.state === "error") {
     const items: string[] = [];
     if (xray.lastError) {
       items.push(`${pc.bold("Last Error:")} ${pc.red(xray.lastError)}`);
+    }
+    if (versionHint) {
+      items.push(versionHint);
     }
     if (xray.logFile) {
       items.push(`${pc.bold("Log File:")} ${pc.dim(xray.logFile)} ${pc.dim("(tail with `masir logs`)")}`);
@@ -248,13 +271,18 @@ const formatXrayInactive = (xray: ResolvedXray, settings: Settings, daemonRunnin
   }
 
   if (daemonRunning) {
-    return renderTree(`${title} ${pc.yellow("○")} ${pc.yellow("Inactive")} ${pc.dim("(stopped)")}`, [
+    const items = [
+      formatRoutingMode(settings),
       `${pc.bold("Ports:")} Mixed ${pc.bold(String(settings.mixedPort))}, API ${pc.bold(String(settings.apiPort))}`,
       `${pc.bold("DNS:")} ${pc.bold(settings.dnsServers.join(", "))}`,
-      `${pc.bold("Hint:")} Connect with \`masir connect\` (or \`masir connect --tun\` for the whole system)`,
-    ]);
+    ];
+    if (versionHint) {
+      items.push(versionHint);
+    }
+    items.push(`${pc.bold("Hint:")} Connect with \`masir connect\` (or \`masir connect --tun\` for the whole system)`);
+    return renderTree(`${title} ${pc.yellow("○")} ${pc.yellow("Inactive")} ${pc.dim("(stopped)")}`, items);
   }
-  return renderTree(`${title} ${pc.dim(`○ Inactive (daemon inactive)`)}`, []);
+  return renderTree(`${title} ${pc.dim(`○ Inactive (daemon inactive)`)}`, versionHint ? [versionHint] : []);
 };
 
 const formatXrayTree = (xray: ResolvedXray, settings: Settings, daemonRunning: boolean): string =>
@@ -278,6 +306,7 @@ const buildStatusJson = (version: string, daemon: ResolvedDaemon, xray: Resolved
     apiPort: settings.apiPort,
     dnsServers: settings.dnsServers,
     mixedPort: settings.mixedPort,
+    routingMode: settings.routingMode,
   },
   xray: xray.running
     ? {

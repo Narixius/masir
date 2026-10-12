@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
+import { loadSettings } from "../../config/settings.js";
 import { isIpTarget, normalizeTarget, rulesInOrder, testRoute } from "../../services/rules/route-test.js";
 import type { RouteResult } from "../../services/rules/route-test.js";
 import { loadRules } from "../../services/rules/storage.js";
@@ -22,7 +23,7 @@ const activeProxy = (): string => {
 const destination = (result: RouteResult): string => {
   const { matched } = result;
   if (!matched) {
-    return pc.cyan(activeProxy());
+    return loadSettings().routingMode === "direct" ? pc.green("direct") : pc.cyan(activeProxy());
   }
   if (matched.rule?.via) {
     return pc.cyan(targetText(matched.rule));
@@ -46,7 +47,9 @@ const destination = (result: RouteResult): string => {
 const ruleLine = (result: RouteResult): string => {
   const { matched } = result;
   if (!matched) {
-    return `${pc.gray("rule:")} none matched, so the default: the active proxy`;
+    const mode = loadSettings().routingMode;
+    const modeText = mode === "direct" ? pc.green("direct") : pc.cyan("the active proxy");
+    return `${pc.gray("rule:")} none matched, so default mode (${modeText})`;
   }
   const position = matched.position === undefined ? "" : `${matched.position}. `;
   return `${pc.gray("rule:")} ${position}${pc.bold(matched.name)} ${pc.dim(`(${result.because.join(", ") || "matches everything"})`)}`;
@@ -86,7 +89,7 @@ export const rulesTestCommand = defineCommand({
     if (result.notes.length > 0) {
       lines.push("");
       for (const text of result.notes) {
-        lines.push(pc.yellow(`! ${text}`));
+        lines.push(pc.dim(text));
       }
     }
     note(lines.join("\n"), isIpTarget(target) ? "Route for IP" : "Route for domain");

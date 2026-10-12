@@ -33,11 +33,15 @@ ${envEntries}
 `;
 };
 
-const launchctl = (args: readonly string[]) => spawnSync("launchctl", [...args], { stdio: "inherit" });
+const launchctl = (args: readonly string[], ignoreOutput = false) =>
+  spawnSync("launchctl", [...args], { stdio: ignoreOutput ? "ignore" : "inherit" });
 
 export const isLaunchdServiceInstalled = (): boolean => existsSync(PLIST_PATH);
 
 export const installLaunchdService = (sourceBinary: string, env: readonly EnvVar[]): void => {
+  // Drop any previous registration first; it is fine if there is none.
+  launchctl(["bootout", `system/${LABEL}`], true);
+
   mkdirSync(dirname(BIN_PATH), { recursive: true });
   // Remove first so a previous (possibly replaced) file is never written through.
   rmSync(BIN_PATH, { force: true });
@@ -47,8 +51,6 @@ export const installLaunchdService = (sourceBinary: string, env: readonly EnvVar
   writeFileSync(PLIST_PATH, renderLaunchdPlist(env));
   chmodSync(PLIST_PATH, PLIST_MODE);
 
-  // Reinstall: drop any previous registration first; it is fine if there is none.
-  launchctl(["bootout", `system/${LABEL}`]);
   const result = launchctl(["bootstrap", "system", PLIST_PATH]);
   if (result.status !== 0) {
     throw new Error(`launchctl bootstrap failed (exit ${result.status ?? "unknown"})`);
@@ -56,7 +58,7 @@ export const installLaunchdService = (sourceBinary: string, env: readonly EnvVar
 };
 
 export const uninstallLaunchdService = (): void => {
-  launchctl(["bootout", `system/${LABEL}`]);
+  launchctl(["bootout", `system/${LABEL}`], true);
   for (const path of [PLIST_PATH, BIN_PATH, SOCKET_PATH]) {
     rmSync(path, { force: true });
   }

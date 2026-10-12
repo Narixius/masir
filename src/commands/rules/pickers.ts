@@ -6,7 +6,8 @@ import pc from "picocolors";
 import { attributeLabel, listGeo } from "../../services/geo/geo.js";
 import type { GeoCategory } from "../../services/geo/geo.js";
 import { isDomainValue, isIpValue, isPortList } from "../../services/rules/schema.js";
-import { pickValues, selectPrompt } from "../../utils/prompts.js";
+import { log } from "../../utils/log.js";
+import { pickValues, selectPrompt, textPrompt } from "../../utils/prompts.js";
 import type { LiveRow } from "../../utils/prompts.js";
 import { chooseAppProcesses } from "./shared.js";
 
@@ -130,41 +131,27 @@ export const pickSourceIps = async (current: readonly string[]): Promise<string[
   return picked.custom;
 };
 
-const PORT_PRESETS: readonly [string, string][] = [
-  ["443", "HTTPS"],
-  ["80", "HTTP"],
-  ["53", "DNS"],
-  ["22", "SSH"],
-  ["25,465,587", "Mail (SMTP)"],
-  ["993", "IMAP"],
-  ["3478-3479", "Voice & video calls (STUN/TURN)"],
-  ["6881-6889", "BitTorrent"],
-  ["8080", "HTTP alternate"],
-];
-
-/** Common ports to pick from; typed ports and ranges allowed. Returns xray's comma-separated form. */
+/** Destination or source ports: direct text prompt with validation. Returns xray's comma-separated form. */
 export const pickPorts = async (
   current: string | undefined,
-  message = "Which ports? (type ports or ranges to add them)"
+  message = "Destination ports (e.g. 443, 80, 3000-8000, 53,443)"
 ): Promise<string | undefined> => {
-  const currentParts = current ? current.split(",").map((part) => part.trim()) : [];
-  const rows: LiveRow<string>[] = PORT_PRESETS.map(([value, name]) => ({
-    header: false,
-    label: `${value} ${pc.dim(name)}`,
-    search: `${value} ${name}`,
-    value,
-  }));
-  const presetParts = new Set<string>(PORT_PRESETS.flatMap(([value]) => value.split(",")));
-  const ticked = rows.map((row) => (row.value.split(",").every((part) => currentParts.includes(part)) ? tick(row) : row));
-  const picked = await pickValues({
-    allowCustom: true,
-    custom: currentParts.filter((part) => !presetParts.has(part)),
-    message,
-    rows: ticked,
-    validate: (value) => (isPortList(value) ? null : PORT_HINT),
-  });
-  const ports = [...picked.values, ...picked.custom].join(",");
-  return ports.length > 0 ? ports : undefined;
+  for (;;) {
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    const entered = await textPrompt({
+      defaultValue: current ?? "",
+      message,
+      placeholder: "e.g. 443, 80, 3000-8000",
+    });
+    const trimmed = entered.trim();
+    if (trimmed.length === 0) {
+      return undefined;
+    }
+    if (isPortList(trimmed)) {
+      return trimmed;
+    }
+    log.error(pc.red(`Invalid port format: ${PORT_HINT}`));
+  }
 };
 
 export const pickNetwork = async (current: string | undefined): Promise<string | undefined> =>

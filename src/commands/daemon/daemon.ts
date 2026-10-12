@@ -14,6 +14,7 @@ export const daemonCommand = defineCommand({
   subCommands: {
     disable: uninstallCommand,
     enable: installCommand,
+    reload: restartDaemonCommand,
     restart: restartDaemonCommand,
     run: runDaemonCommand,
     stop: stopDaemonCommand,

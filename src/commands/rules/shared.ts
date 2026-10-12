@@ -359,19 +359,35 @@ export const xrayRejection = (rules: readonly UserRule[]): string | null => {
   if (check.status === "unchecked") {
     spinner.stop(pc.yellow(`Could not check the rule with xray (${check.reason}).`));
   } else {
-    spinner.stop(pc.dim("xray accepts the rule."));
+    spinner.clear();
   }
   return null;
 };
 
-/** Reload a running xray with the saved rules, and say what happened. */
-export const applyToDaemon = (): void => {
+export interface ReloadResult {
+  readonly ok: boolean;
+  readonly message: string;
+}
+
+export const reloadDaemon = (): ReloadResult => {
   const res = tryCallHelper<ResponseOf<"reload">>({ type: "reload" });
   if (!res) {
-    log.step(pc.dim("Takes effect the next time you connect (`masir connect`)."));
-  } else if (res.ok) {
+    return { message: "takes effect on next connect", ok: false };
+  }
+  if (res.ok) {
+    return { message: "applied to running xray", ok: true };
+  }
+  return { message: `xray reload failed: ${res.error}`, ok: false };
+};
+
+/** Reload a running xray with the saved rules, and say what happened. */
+export const applyToDaemon = (): void => {
+  const res = reloadDaemon();
+  if (res.ok) {
     log.step(pc.cyan("Applied: the running xray was reloaded with the new rules."));
+  } else if (res.message === "takes effect on next connect") {
+    log.step(pc.dim("Takes effect the next time you connect (`masir connect`)."));
   } else {
-    log.warn(pc.yellow(`Saved, but reloading xray failed: ${res.error}`));
+    log.warn(pc.yellow(res.message));
   }
 };

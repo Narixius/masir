@@ -1,10 +1,11 @@
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
+import { loadSettings } from "../../config/settings.js";
 import { routingForRules } from "../../services/rules/pins.js";
 import { loadRules } from "../../services/rules/storage.js";
 import { getActiveNodeId } from "../../services/subscription/storage.js";
-import { log, note } from "../../utils/log.js";
+import { log } from "../../utils/log.js";
 import { describeRule } from "./describe.js";
 
 export const rulesListCommand = defineCommand({
@@ -22,16 +23,31 @@ export const rulesListCommand = defineCommand({
   },
   run({ args }) {
     const rules = loadRules();
+    const { routingMode } = loadSettings();
+    const modeLabel = routingMode === "direct" ? pc.green("direct") : pc.cyan("proxy");
     if (args.json) {
       console.log(JSON.stringify(routingForRules(rules, getActiveNodeId()).userRules, null, 2));
       return;
     }
     if (rules.length === 0) {
-      log.info("No routing rules. Add one with `masir rules add --name <name> --domain <domain> --outbound direct`.");
+      log.info(
+        `No custom routing rules (default mode: ${modeLabel}). Add one with \`masir rules add\` or switch mode with \`masir mode\`.`
+      );
       return;
     }
-    const sections = rules.map((rule, i) => describeRule(rule, i + 1).join("\n"));
-    sections.push(pc.dim("Top to bottom, the first match wins. DNS and LAN rules are built in."));
-    note(sections.join("\n\n"), `Routing rules (${rules.length})`);
+    const lines: string[] = [`${pc.bold("Routing rules")} ${pc.dim(`(${rules.length})`)}`, ""];
+    for (const [i, rule] of rules.entries()) {
+      lines.push(describeRule(rule, i + 1).join("\n"));
+      if (i < rules.length - 1) {
+        lines.push("");
+      }
+    }
+    lines.push(
+      "",
+      `${pc.bold(`${rules.length + 1}. default`)} ${pc.dim("→")} ${modeLabel} ${pc.dim("(catch-all • change with `masir mode`)")}`,
+      "",
+      pc.dim("Top to bottom, the first match wins. DNS and LAN rules are built in.")
+    );
+    console.log(lines.join("\n"));
   },
 });

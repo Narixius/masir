@@ -294,8 +294,9 @@ fn render(msg: &str, session: &Mutex<Session>, cur: Option<usize>, prev_count: u
                 let selected = Some(idx) == cur;
                 if idx == ADD_ROW {
                     let value = s.add_candidate().unwrap_or_default();
+                    let pointer = if selected { format!("{GREEN}→{RESET}") } else { " ".to_owned() };
                     let marker = if selected { format!("{GREEN}+{RESET}") } else { format!("{GRAY}+{RESET}") };
-                    buf.push_str(&format!("\r{CYAN}│{RESET}    {marker} {BOLD}add “{value}”{RESET}\r\n"));
+                    buf.push_str(&format!("\r{CYAN}│{RESET}  {pointer} {marker} {BOLD}add “{value}”{RESET}\r\n"));
                     count += 1;
                     continue;
                 }
@@ -306,10 +307,10 @@ fn render(msg: &str, session: &Mutex<Session>, cur: Option<usize>, prev_count: u
                 } else if s.multi {
                     let box_ = if row.checked { format!("{GREEN}◼{RESET}") } else { format!("{GRAY}◻{RESET}") };
                     let text = if selected { format!("{BOLD}{line}{RESET}") } else { line };
-                    let pointer = if selected { format!("{CYAN}›{RESET}") } else { " ".to_owned() };
+                    let pointer = if selected { format!("{GREEN}→{RESET}") } else { " ".to_owned() };
                     buf.push_str(&format!("\r{CYAN}│{RESET}  {pointer} {box_} {text}\r\n"));
                 } else if selected {
-                    buf.push_str(&format!("\r{CYAN}│{RESET}    {GREEN}●{RESET} {BOLD}{line}{RESET}\r\n"));
+                    buf.push_str(&format!("\r{CYAN}│{RESET}  {GREEN}→{RESET} {GREEN}●{RESET} {BOLD}{line}{RESET}\r\n"));
                 } else {
                     buf.push_str(&format!("\r{CYAN}│{RESET}    {GRAY}○{RESET} {line}\r\n"));
                 }

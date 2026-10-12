@@ -123,6 +123,7 @@ export class Xray {
     this.state = "not-started";
     this.lastError = null;
     this.xrayPid = null;
+    this.version = null;
 
     const onData = makeLineReader((line) => {
       if (line.startsWith(XRAY_PID_PREFIX)) {

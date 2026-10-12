@@ -9,6 +9,7 @@ import { readRawSettings } from "./settings.js";
 import type { Settings, SettingValue } from "./settings.js";
 
 export type SettingKey =
+  | "routingMode"
   | "mixedPort"
   | "apiPort"
   | "xrayExecutable"
@@ -83,7 +84,22 @@ const parseDnsServers = (text: string): ParsedSetting => {
   return { ok: true, value: servers };
 };
 
+const parseRoutingMode = (text: string): ParsedSetting => {
+  const mode = text.toLowerCase();
+  if (mode === "proxy" || mode === "direct") {
+    return { ok: true, value: mode };
+  }
+  return fail('must be "proxy" or "direct"');
+};
+
 export const SETTINGS: readonly SettingSpec[] = [
+  {
+    description: "Default catch-all route at the end of rules (proxy or direct)",
+    key: "routingMode",
+    label: "Routing mode",
+    parse: parseRoutingMode,
+    reloadsXray: true,
+  },
   {
     description: "Local HTTP + SOCKS5 proxy port",
     key: "mixedPort",
@@ -147,6 +163,9 @@ export const findSetting = (key: string): SettingSpec | undefined => {
 /** The effective value of a setting, as text. */
 export const formatSetting = (spec: SettingSpec, settings: Settings): string => {
   switch (spec.key) {
+    case "routingMode": {
+      return settings.routingMode;
+    }
     case "mixedPort": {
       return String(settings.mixedPort);
     }

@@ -59,19 +59,32 @@ const isExecutableFile = (path: string): boolean => {
   }
 };
 
-/** `XRAY_EXECUTABLE`, else xray in a standard location, else `xray` from your PATH. */
-export const resolveXrayExecutable = (): string => {
+/** `XRAY_EXECUTABLE`, else xray in PATH or a standard location. */
+export const resolveXrayExecutable = (configured?: string): string => {
+  if (configured?.includes("/")) {
+    return configured;
+  }
   const fromEnv = process.env["XRAY_EXECUTABLE"];
-  if (fromEnv) {
+  if (fromEnv && (!configured || configured === "xray")) {
     return fromEnv;
   }
+  const exeName = configured || "xray";
+  const delimiter = process.platform === "win32" ? ";" : ":";
+  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+    if (dir) {
+      const candidate = join(dir, exeName);
+      if (isExecutableFile(candidate)) {
+        return candidate;
+      }
+    }
+  }
   for (const location of standardLocations()) {
-    const candidate = join(location.bin, "xray");
+    const candidate = join(location.bin, exeName);
     if (isExecutableFile(candidate)) {
       return candidate;
     }
   }
-  return "xray";
+  return exeName;
 };
 
 /**
@@ -95,6 +108,9 @@ export const resolveAssetsPath = (configuredPath?: string, executablePath?: stri
   return findExeAssets(executablePath ?? resolveXrayExecutable()) ?? configuredPath ?? masirXrayDir();
 };
 
+const routingModeSchema = z.enum(["proxy", "direct"]);
+export type RoutingMode = z.infer<typeof routingModeSchema>;
+
 /**
  * Fallbacks are functions so importing this module does no filesystem probing;
  * asset discovery only runs when a config actually lacks `xrayAssetsPath`.
@@ -104,9 +120,10 @@ const defaults = {
   dnsServers: () => ["1.1.1.1", "8.8.8.8"],
   gateway: () => "10.10.20.1/24",
   mixedPort: () => 8083,
-  subUpdateIntervalMinutes: () => 720,
+  routingMode: (): RoutingMode => "proxy",
+  subUpdateIntervalMinutes: () => 60,
   xrayAssetsPath: () => resolveAssetsPath(process.env["XRAY_LOCATION_ASSET"]),
-  xrayExecutable: resolveXrayExecutable,
+  xrayExecutable: () => resolveXrayExecutable(),
 };
 
 const withDefault = <T extends z.ZodMiniType>(key: string, schema: T, fallback: () => z.output<T>) =>
@@ -126,6 +143,7 @@ const SettingsSchema = z.object({
   dnsServers: withDefault("dnsServers", z.array(z.ipv4()).check(z.minLength(1)), defaults.dnsServers),
   gateway: withDefault("gateway", z.cidrv4(), defaults.gateway),
   mixedPort: withDefault("mixedPort", port, defaults.mixedPort),
+  routingMode: withDefault("routingMode", routingModeSchema, defaults.routingMode),
   subUpdateIntervalMinutes: withDefault("subUpdateIntervalMinutes", positiveInt, defaults.subUpdateIntervalMinutes),
   xrayAssetsPath: withDefault("xrayAssetsPath", nonEmpty, defaults.xrayAssetsPath),
   xrayExecutable: withDefault("xrayExecutable", nonEmpty, defaults.xrayExecutable),
@@ -149,7 +167,13 @@ export const readRawSettings = (): Record<string, unknown> => {
   return {};
 };
 
-export const loadSettings = (): Settings => z.parse(SettingsSchema, readRawSettings());
+export const loadSettings = (): Settings => {
+  const parsed = z.parse(SettingsSchema, readRawSettings());
+  return {
+    ...parsed,
+    xrayExecutable: resolveXrayExecutable(parsed.xrayExecutable),
+  };
+};
 
 /** A value `config.json` can hold. */
 export type SettingValue = number | string | string[];
@@ -175,3 +199,6 @@ export const writeSetting = (key: string, value?: SettingValue): Settings => {
 
 /** Persist the assets folder (`masir connect --assets`). */
 export const saveAssetsPath = (path: string): Settings => writeSetting("xrayAssetsPath", path);
+
+/** Persist the default catch-all routing mode (`masir mode`). */
+export const saveRoutingMode = (mode: RoutingMode): Settings => writeSetting("routingMode", mode);

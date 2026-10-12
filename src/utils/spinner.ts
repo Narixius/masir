@@ -1,6 +1,7 @@
 import pc from "picocolors";
 
 export interface SpinnerInstance {
+  readonly clear: () => void;
   readonly error: (msg?: string) => void;
   readonly message: (msg: string) => void;
   readonly start: (msg: string) => void;
@@ -20,6 +21,15 @@ export const createSpinner = (): SpinnerInstance => {
   };
 
   return {
+    clear(): void {
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      if (process.stdout.isTTY) {
+        process.stdout.write("\r\u001B[2K");
+      }
+    },
     error(msg: string | undefined): void {
       if (timer) {
         clearInterval(timer);

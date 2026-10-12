@@ -261,9 +261,9 @@ pub extern "C" fn masir_prompt_select(
                     let is_current = idx == cur;
 
                     if is_current {
-                        let _ = write!(out, "\r{CYAN}│{RESET}  {GREEN}●{RESET} {BOLD}{item}{RESET}\r\n");
+                        let _ = write!(out, "\r{CYAN}│{RESET}  {GREEN}→{RESET} {GREEN}●{RESET} {BOLD}{item}{RESET}\r\n");
                     } else {
-                        let _ = write!(out, "\r{CYAN}│{RESET}  {GRAY}○{RESET} {GRAY}{item}{RESET}\r\n");
+                        let _ = write!(out, "\r{CYAN}│{RESET}    {GRAY}○{RESET} {GRAY}{item}{RESET}\r\n");
                     }
                     lines += 1;
                 }
@@ -439,6 +439,7 @@ pub extern "C" fn masir_prompt_multiselect(
                     let is_current = idx == cur;
                     let is_checked = sel.contains(&idx);
 
+                    let pointer = if is_current { format!("{GREEN}→{RESET}") } else { " ".to_owned() };
                     let (marker, label) = match (is_current, is_checked) {
                         (true, true) => (format!("{GREEN}◼{RESET}"), format!("{BOLD}{item}{RESET}")),
                         (false, true) => (format!("{GREEN}◼{RESET}"), format!("{GRAY}{item}{RESET}")),
@@ -446,7 +447,7 @@ pub extern "C" fn masir_prompt_multiselect(
                         (false, false) => (format!("{GRAY}◻{RESET}"), format!("{GRAY}{item}{RESET}")),
                     };
 
-                    let _ = write!(out_io, "\r{CYAN}│{RESET}  {marker} {label}\r\n");
+                    let _ = write!(out_io, "\r{CYAN}│{RESET}  {pointer} {marker} {label}\r\n");
                     lines += 1;
                 }
 

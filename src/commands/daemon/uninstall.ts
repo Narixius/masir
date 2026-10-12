@@ -3,7 +3,9 @@ import { spawnSync } from "node:child_process";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
+import type { ResponseOf } from "../../protocol.js";
 import { isServiceSupported, uninstallDaemonService } from "../../services/daemon-service/daemon-service.js";
+import { tryCallHelper } from "../../utils/ipc.js";
 import { createSpinner } from "../../utils/spinner.js";
 
 export const uninstallCommand = defineCommand({
@@ -29,6 +31,7 @@ export const uninstallCommand = defineCommand({
     const spinner = createSpinner();
     spinner.start("Removing masir daemon service...");
     try {
+      tryCallHelper<ResponseOf<"shutdown">>({ type: "shutdown" });
       uninstallDaemonService();
       spinner.stop(pc.green("Masir daemon service removed successfully."));
     } catch (error) {

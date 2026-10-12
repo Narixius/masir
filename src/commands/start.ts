@@ -3,6 +3,7 @@ import pc from "picocolors";
 
 import { saveAssetsPath } from "../config/settings.js";
 import type { ResponseOf } from "../protocol.js";
+import { ensureMinimumXray } from "../services/xray-updater.js";
 import { ensureHandlerIsReady } from "../utils/handler.js";
 import { callHelper } from "../utils/ipc.js";
 import { log } from "../utils/log.js";
@@ -31,6 +32,11 @@ export const startCommand = defineCommand({
   async run({ args }) {
     if (args.assets) {
       saveAssetsPath(String(args.assets));
+    }
+
+    const xrayReady = await ensureMinimumXray();
+    if (!xrayReady) {
+      process.exit(1);
     }
 
     const isTun = Boolean(args.tun);

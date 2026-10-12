@@ -282,6 +282,12 @@ export const buildRoutingRules = (options: DesiredConfigOptions): XrayRoutingRul
     }
   }
 
+  rules.push({
+    network: "tcp,udp",
+    outboundTag: options.settings.routingMode,
+    ruleTag: "default-route",
+  });
+
   return rules;
 };
 

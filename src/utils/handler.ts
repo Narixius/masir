@@ -133,6 +133,9 @@ const printPrivilegeNotice = (): void => {
 };
 
 const isBinaryUpdated = (info: InfoResult): boolean => {
+  if (isDaemonServiceInstalled() && info.helperEuid === 0) {
+    return false;
+  }
   try {
     const currentMtime = statSync(process.execPath).mtimeMs;
     return Boolean(info.binaryMtime && currentMtime > info.binaryMtime + 1000);
@@ -142,6 +145,7 @@ const isBinaryUpdated = (info: InfoResult): boolean => {
 };
 
 const stopExistingDaemon = async (binaryUpdated: boolean, spinner?: ClackSpinner): Promise<boolean> => {
+  const oldInfo = checkHandlerInfo();
   if (binaryUpdated) {
     if (spinner) {
       spinner.message("Masir binary was updated; restarting daemon...");
@@ -155,7 +159,10 @@ const stopExistingDaemon = async (binaryUpdated: boolean, spinner?: ClackSpinner
   }
 
   tryCallHelper<ResponseOf<"shutdown">>({ type: "shutdown" });
-  const gone = await waitUntil(() => checkHandlerInfo() === null, SHUTDOWN_TIMEOUT_MS);
+  const gone = await waitUntil(() => {
+    const next = checkHandlerInfo();
+    return next === null || (oldInfo !== null && next.helperPid !== oldInfo.helperPid);
+  }, SHUTDOWN_TIMEOUT_MS);
   if (!gone) {
     if (spinner) {
       spinner.error(pc.red("Could not stop the running daemon."));
@@ -167,18 +174,39 @@ const stopExistingDaemon = async (binaryUpdated: boolean, spinner?: ClackSpinner
   return true;
 };
 
+const reportHandlerError = (msg: string, spinner?: ClackSpinner): false => {
+  if (spinner) {
+    spinner.error(pc.red(msg));
+  } else {
+    console.error(msg);
+  }
+  return false;
+};
+
+const canReuseDaemon = (info: InfoResult, requirePrivileged: boolean): boolean => {
+  if (isDaemonServiceInstalled() && info.helperEuid === 0) {
+    return true;
+  }
+  return !isBinaryUpdated(info) && (!requirePrivileged || info.helperEuid === 0);
+};
+
 export const ensureHandlerIsReady = async (options?: EnsureHandlerOptions): Promise<boolean> => {
   const requirePrivileged = Boolean(options?.privileged);
   const spinner = options?.spinner;
-  const currentInfo = checkHandlerInfo();
+  let currentInfo = checkHandlerInfo();
+
+  if (!currentInfo && isDaemonServiceInstalled()) {
+    await waitUntil(() => {
+      currentInfo = checkHandlerInfo();
+      return currentInfo !== null;
+    }, 2000);
+  }
 
   if (currentInfo) {
-    const binaryUpdated = isBinaryUpdated(currentInfo);
-    if (!binaryUpdated && (!requirePrivileged || currentInfo.helperEuid === 0)) {
+    if (canReuseDaemon(currentInfo, requirePrivileged)) {
       return true;
     }
-
-    const stopped = await stopExistingDaemon(binaryUpdated, spinner);
+    const stopped = await stopExistingDaemon(isBinaryUpdated(currentInfo), spinner);
     if (!stopped) {
       return false;
     }
@@ -195,21 +223,13 @@ export const ensureHandlerIsReady = async (options?: EnsureHandlerOptions): Prom
 
   const pid = spawnDaemonProcess(requirePrivileged);
   if (pid <= 0) {
-    if (spinner) {
-      spinner.error(pc.red("Failed to spawn daemon process."));
-    } else {
-      console.error("Failed to spawn daemon process");
-    }
-    return false;
+    return reportHandlerError("Failed to spawn daemon process.", spinner);
   }
 
   if (requirePrivileged && spinner) {
     spinner.start("Connecting to privileged daemon...");
   }
-
-  if (spinner) {
-    spinner.message("Waiting for daemon socket...");
-  }
+  spinner?.message("Waiting for daemon socket...");
 
   const ready = await waitUntil(
     () => {
@@ -219,12 +239,7 @@ export const ensureHandlerIsReady = async (options?: EnsureHandlerOptions): Prom
     requirePrivileged ? PRIVILEGED_READY_TIMEOUT_MS : READY_TIMEOUT_MS
   );
   if (!ready) {
-    if (spinner) {
-      spinner.error(pc.red("Daemon spawned but socket did not become ready in time."));
-    } else {
-      console.error("Daemon spawned but socket did not become ready in time.");
-    }
-    return false;
+    return reportHandlerError("Daemon spawned but socket did not become ready in time.", spinner);
   }
 
   return true;
