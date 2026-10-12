@@ -55,7 +55,7 @@ $ masir rules rm <name>
 - **Apps:** an app together with all of its helper processes and data folders.
 - **Ports, network, protocol:** common choices, or your own.
 
-You then choose where the traffic goes; "a specific proxy…" pins the rule to one proxy and falls back to the active proxy if that proxy disappears. You also pick the rule's position, then review and save. masir checks the rule with `xray run -test` before saving, and a running xray picks it up right away.
+You then choose where the traffic goes; "a specific proxy…" pins the rule to one proxy and falls back to the active proxy if that proxy disappears. Review it and save: new rules go to the end of the list, and `masir rules edit` can move them. masir checks the rule with `xray run -test` before saving, and a running xray picks it up right away.
 
 Every step also has a flag, for scripts:
 

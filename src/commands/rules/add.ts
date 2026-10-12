@@ -52,32 +52,16 @@ const resolveName = async (given: string, existing: readonly UserRule[]): Promis
   return checked;
 };
 
-const resolvePosition = (given: string): Step<number | undefined> => {
-  const value = given.trim();
-  if (value.length === 0) {
-    return { ok: true, value: undefined };
-  }
-  const position = Number(value);
-  return Number.isInteger(position) && position >= 1
-    ? { ok: true, value: position }
-    : { error: "--position must be a whole number from 1.", ok: false };
-};
-
 /** The non-matcher flags `buildRule` reads (matchers come from the raw argv). */
 interface AddArgs {
   readonly name?: string;
   readonly json?: string;
   readonly outbound?: string;
-  readonly position?: string;
   readonly via?: string;
 }
 
 /** Everything the flags describe, validated: the rule, its name, and where it goes. */
-const buildRule = async (
-  args: AddArgs,
-  rawArgs: readonly string[],
-  existing: readonly UserRule[]
-): Promise<Step<{ readonly rule: UserRule; readonly position?: number }>> => {
+const buildRule = async (args: AddArgs, rawArgs: readonly string[], existing: readonly UserRule[]): Promise<Step<UserRule>> => {
   const name = await resolveName(text(args.name), existing);
   if (!name.ok) {
     return name;
@@ -98,17 +82,13 @@ const buildRule = async (
   if (!target.ok) {
     return target;
   }
-  const position = resolvePosition(text(args.position));
-  if (!position.ok) {
-    return position;
-  }
   matchers.value["outboundTag"] = target.value.outbound;
   const parsed = parseRule(matchers.value);
   if (!parsed.ok) {
     return { error: `Invalid rule:\n${parsed.error}`, ok: false };
   }
   const rule: XrayRuleJson = parsed.value;
-  return { ok: true, value: { position: position.value, rule: { createdAt: Date.now(), name: name.value, rule, via: target.value.via } } };
+  return { ok: true, value: { createdAt: Date.now(), name: name.value, rule, via: target.value.via } };
 };
 
 /** Flags given alongside the wizard fill their steps; the wizard asks for the rest. */
@@ -129,11 +109,7 @@ const wizardPreset = async (args: AddArgs, existing: readonly UserRule[]): Promi
     }
     target = resolved.value;
   }
-  const position = resolvePosition(text(args.position));
-  if (!position.ok) {
-    return position;
-  }
-  return { ok: true, value: { name, position: position.value, target } };
+  return { ok: true, value: { name, target } };
 };
 
 const addWithWizard = async (args: AddArgs, existing: readonly UserRule[]): Promise<void> => {
@@ -147,7 +123,7 @@ const addWithWizard = async (args: AddArgs, existing: readonly UserRule[]): Prom
     return;
   }
   try {
-    insertRule(result.rule, result.position);
+    insertRule(result.rule);
   } catch (error: unknown) {
     fail(error instanceof Error ? error.message : String(error));
     return;
@@ -163,7 +139,6 @@ export const rulesAddCommand = defineCommand({
     json: { description: 'a raw xray rule object instead of matcher flags, e.g. \'{"domain":["geosite:google"]}\'', type: "string" },
     name: { description: "unique rule name (letters, digits, - and _)", type: "string" },
     outbound: { alias: "o", description: "where matching traffic goes: proxy, direct or block", type: "string" },
-    position: { description: "1-based place in the list (rules match top to bottom; default: last)", type: "string" },
     via: VIA_ARG,
   },
   meta: {
@@ -182,13 +157,13 @@ export const rulesAddCommand = defineCommand({
       fail(built.error);
       return;
     }
-    const { rule, position } = built.value;
-    if (xrayRejection(withRuleInserted(existing, rule, position)) !== null) {
+    const rule = built.value;
+    if (xrayRejection(withRuleInserted(existing, rule)) !== null) {
       setExitCode(1);
       return;
     }
     try {
-      insertRule(rule, position);
+      insertRule(rule);
     } catch (error: unknown) {
       fail(error instanceof Error ? error.message : String(error));
       return;

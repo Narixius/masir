@@ -217,27 +217,25 @@ const askTarget = async (current?: RuleTarget): Promise<RuleTarget> => {
   }
 };
 
-/** 1-based place of the rule named `name` in `rules`. */
-const positionOf = (rules: readonly UserRule[], name: string): number => rules.findIndex((rule) => rule.name === name) + 1;
-
 export interface WizardResult {
   readonly rule: UserRule;
-  readonly position?: number;
 }
 
 export interface WizardPreset {
   readonly name?: string;
   readonly target?: RuleTarget;
-  readonly position?: number;
 }
 
-type ReviewChoice = "save" | "matches" | "target" | "position" | "name" | "cancel";
+type ReviewChoice = "save" | "matches" | "target" | "name" | "cancel";
 
-/** `masir rules add` in a terminal: ask for each part, review, check with xray, return the rule (or `null` if cancelled). */
+/**
+ * `masir rules add` in a terminal: ask for each part, review, check with xray,
+ * return the rule (or `null` if cancelled). New rules go last; `rules edit`
+ * moves them.
+ */
 export const runAddWizard = async (existing: readonly UserRule[], preset: WizardPreset): Promise<WizardResult | null> => {
   let matchers = await chooseMatchers({});
   let target = preset.target ?? (await askTarget());
-  let position = preset.position ?? (await choosePosition(existing));
   let name = preset.name ?? (await chooseName(suggestName(matchers, target, existing), existing));
   const createdAt = Date.now();
 
@@ -245,7 +243,7 @@ export const runAddWizard = async (existing: readonly UserRule[], preset: Wizard
     const built = candidate(name, matchers, target, createdAt);
     let choice: ReviewChoice;
     if (built.ok) {
-      const placed = positionOf(withRuleInserted(existing, built.rule, position), built.rule.name);
+      const placed = existing.length + 1;
       note(describeRule(built.rule, placed).join("\n"), "Review");
       // oxlint-disable-next-line eslint/no-await-in-loop
       choice = await selectPrompt<ReviewChoice>({
@@ -254,7 +252,6 @@ export const runAddWizard = async (existing: readonly UserRule[], preset: Wizard
           { label: "Save", value: "save" },
           { label: "Change what it matches", value: "matches" },
           { label: "Change where traffic goes", value: "target" },
-          { label: "Change its position", value: "position" },
           { label: "Rename", value: "name" },
           { label: "Cancel", value: "cancel" },
         ],
@@ -265,8 +262,8 @@ export const runAddWizard = async (existing: readonly UserRule[], preset: Wizard
     }
 
     if (choice === "save" && built.ok) {
-      if (xrayRejection(withRuleInserted(existing, built.rule, position)) === null) {
-        return { position, rule: built.rule };
+      if (xrayRejection(withRuleInserted(existing, built.rule)) === null) {
+        return { rule: built.rule };
       }
     } else if (choice === "cancel") {
       log.info("Cancelled; nothing was saved.");
@@ -277,9 +274,6 @@ export const runAddWizard = async (existing: readonly UserRule[], preset: Wizard
     } else if (choice === "target") {
       // oxlint-disable-next-line eslint/no-await-in-loop
       target = await askTarget(target);
-    } else if (choice === "position") {
-      // oxlint-disable-next-line eslint/no-await-in-loop
-      position = await choosePosition(existing, position);
     } else if (choice === "name") {
       // oxlint-disable-next-line eslint/no-await-in-loop
       name = await chooseName(name, existing);
