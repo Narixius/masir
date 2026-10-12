@@ -5,6 +5,7 @@ import type { Settings } from "../config/settings.js";
 import { getXrayGrpcClient } from "../contexts/grpc.js";
 import { XrayType } from "../injectables/xray/types.js";
 import type { ReconcileResult, XrayMode } from "../protocol.js";
+import { tunInterfaceName } from "../utils/tun-name.js";
 import type { TaggedXrayRule } from "./rules/storage.js";
 import type { ManagedOutbound } from "./subscription/types.js";
 import { xray } from "./xray.js";
@@ -63,7 +64,8 @@ export const buildMixedInbound = (mixedPort: number, sniff = false): XrayInbound
 
 /**
  * Builds the TUN inbound interface.
- * Leaving interface name unspecified lets Xray-core dynamically allocate a free utun device.
+ * On macOS it gets a free `utunN` name (the only kind macOS allows); elsewhere
+ * xray picks the name.
  */
 export const buildTunInbound = (settings: Settings): XrayInbound =>
   ({
@@ -74,6 +76,7 @@ export const buildTunInbound = (settings: Settings): XrayInbound =>
       dns: settings.dnsServers,
       gateway: [settings.gateway],
       mtu: 1500,
+      name: tunInterfaceName(),
     },
     sniffing: {
       destOverride: ["http", "tls", "quic", "fakedns"],
