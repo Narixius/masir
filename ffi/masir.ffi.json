@@ -84,7 +84,7 @@
     {
       "name": "masirPromptLiveSelectStart",
       "symbol": "masir_prompt_live_select_start",
-      "params": ["string", "string", "i32"],
+      "params": ["string", "string", "i32", "u32"],
       "returns": "i32"
     },
     {
@@ -114,6 +114,24 @@
     {
       "name": "masirListProcesses",
       "symbol": "masir_list_processes",
+      "params": ["mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirGeoList",
+      "symbol": "masir_geo_list",
+      "params": ["string", "u32", "mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirGeoHumanize",
+      "symbol": "masir_geo_humanize",
+      "params": ["string", "mutable-bytes"],
+      "returns": "i32"
+    },
+    {
+      "name": "masirPromptLiveSelectSelection",
+      "symbol": "masir_prompt_live_select_selection",
       "params": ["mutable-bytes"],
       "returns": "i32"
     }

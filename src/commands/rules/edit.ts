@@ -7,7 +7,7 @@ import pc from "picocolors";
 
 import { closestField, parseRule, RULE_FIELDS } from "../../services/rules/schema.js";
 import type { RawRule, UserRule } from "../../services/rules/schema.js";
-import { loadRules, replaceRule, withRuleReplaced } from "../../services/rules/storage.js";
+import { loadRules, replaceRule, withRuleMoved, withRuleReplaced } from "../../services/rules/storage.js";
 import { setExitCode } from "../../utils/exit-code.js";
 import { getAppDirs, writeFileEnsured } from "../../utils/fs.js";
 import { log, note } from "../../utils/log.js";
@@ -31,6 +31,7 @@ import {
   xrayRejection,
 } from "./shared.js";
 import type { RuleInput, Step } from "./shared.js";
+import { chooseMatchers, chooseName, choosePosition } from "./wizard.js";
 
 /** Rule field for a flag spelling, for `--unset source-port`. */
 const fieldForFlag = (name: string): string => {
@@ -267,14 +268,19 @@ const changeLines = (before: UserRule, after: UserRule): string[] => {
 };
 
 /** Check with xray, save in place, show the change, reload. False when xray rejected it. */
-const saveEdit = (current: UserRule, updated: UserRule, rules: readonly UserRule[]): boolean => {
-  const candidate = withRuleReplaced(rules, current.name, updated);
+const saveEdit = (current: UserRule, updated: UserRule, rules: readonly UserRule[], moveTo?: number | "last"): boolean => {
+  const replaced = withRuleReplaced(rules, current.name, updated);
+  const candidate = moveTo === undefined ? replaced : withRuleMoved(replaced, updated.name, moveTo === "last" ? undefined : moveTo);
   if (xrayRejection(candidate) !== null) {
     return false;
   }
-  replaceRule(current.name, updated);
+  replaceRule(current.name, updated, moveTo);
   const position = candidate.findIndex((rule) => rule.name === updated.name) + 1;
+  const before = rules.findIndex((rule) => rule.name === current.name) + 1;
   const changes = changeLines(current, updated);
+  if (position !== before) {
+    changes.push(`${pc.red("-")} position: ${before}`, `${pc.green("+")} position: ${position}`);
+  }
   note([...describeRule(updated, position), "", ...(changes.length > 0 ? changes : [pc.dim("no changes")])].join("\n"), "Rule updated");
   applyToDaemon();
   return true;
@@ -328,6 +334,100 @@ const editInEditor = async (current: UserRule, rules: readonly UserRule[]): Prom
   }
 };
 
+type MenuChoice = "save" | "matches" | "target" | "position" | "name" | "json" | "cancel";
+
+interface PartChange {
+  readonly rule: UserRule;
+  readonly moveTo?: number | "last";
+}
+
+/** One menu step: the rule with that part changed (validated), or unchanged if it wouldn't be valid. */
+const changePart = async (part: MenuChoice, draft: UserRule, others: readonly UserRule[]): Promise<PartChange> => {
+  if (part === "position") {
+    const position = await choosePosition(others);
+    return { moveTo: position ?? "last", rule: draft };
+  }
+  if (part === "name") {
+    return { rule: { ...draft, name: await chooseName(draft.name, others, draft.name) } };
+  }
+  const fields: RuleInput = { ...draft.rule };
+  let { via } = draft;
+  if (part === "matches") {
+    const matchers = await chooseMatchers(fields);
+    fields.domain = matchers.domain;
+    fields.ip = matchers.ip;
+    fields.network = matchers.network;
+    fields.port = matchers.port;
+    fields.process = matchers.process;
+    fields.protocol = matchers.protocol;
+    fields.source = matchers.source;
+    fields.sourcePort = matchers.sourcePort;
+  } else {
+    const target = await resolveTarget("", "");
+    if (!target.ok) {
+      log.error(pc.red(target.error));
+      return { rule: draft };
+    }
+    fields.outboundTag = target.value.outbound;
+    ({ via } = target.value);
+  }
+  const parsed = parseRule(definedFields(fields));
+  if (!parsed.ok) {
+    log.error(pc.red(`That change would leave the rule invalid:\n${parsed.error}`));
+    return { rule: draft };
+  }
+  return { rule: { ...draft, rule: parsed.value, via: parsed.value.outboundTag === "proxy" ? via : undefined } };
+};
+
+/** `rules edit <name>` in a terminal: change parts of the rule from a menu, then save once. */
+const editMenu = async (current: UserRule, rules: readonly UserRule[]): Promise<void> => {
+  const others = rules.filter((rule) => rule.name !== current.name);
+  let draft: UserRule = current;
+  let moveTo: number | "last" | undefined;
+  for (;;) {
+    const position = moveTo === undefined ? rules.findIndex((rule) => rule.name === current.name) + 1 : undefined;
+    note(describeRule(draft, position).join("\n"), draft === current && moveTo === undefined ? "Editing" : "Editing (unsaved changes)");
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    const choice = await selectPrompt<MenuChoice>({
+      message: "What do you want to change?",
+      options: [
+        { label: "Save changes", value: "save" },
+        { label: "What it matches", value: "matches" },
+        { label: "Where traffic goes", value: "target" },
+        { label: "Its position", value: "position" },
+        { label: "Its name", value: "name" },
+        { hint: "open the xray rule in $EDITOR", label: "Edit as JSON", value: "json" },
+        { label: "Cancel", value: "cancel" },
+      ],
+    });
+    if (choice === "save") {
+      if (draft === current && moveTo === undefined) {
+        log.info("No changes.");
+        return;
+      }
+      if (saveEdit(current, draft, rules, moveTo)) {
+        return;
+      }
+      continue;
+    }
+    if (choice === "cancel") {
+      log.info("Cancelled; nothing was changed.");
+      return;
+    }
+    if (choice === "json") {
+      // oxlint-disable-next-line eslint/no-await-in-loop
+      await editInEditor(draft, rules);
+      return;
+    }
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    const next = await changePart(choice, draft, others);
+    if (next.moveTo !== undefined) {
+      ({ moveTo } = next);
+    }
+    draft = next.rule;
+  }
+};
+
 const pickRule = async (rules: readonly UserRule[], given: string): Promise<UserRule | undefined> => {
   if (given.length > 0) {
     return rules.find((rule) => rule.name === given);
@@ -357,7 +457,7 @@ export const rulesEditCommand = defineCommand({
     via: VIA_ARG,
   },
   meta: {
-    description: "Edit a routing rule (flags change fields; no flags opens it in $EDITOR)",
+    description: "Edit a routing rule: a menu in a terminal, or flags to change fields",
     name: "edit",
   },
   async run({ args, rawArgs }) {
@@ -389,6 +489,6 @@ export const rulesEditCommand = defineCommand({
       fail("Nothing to change: pass matcher flags, --unset, --outbound, --rename or --json (or run in a terminal to use $EDITOR).");
       return;
     }
-    await editInEditor(current, rules);
+    await editMenu(current, rules);
   },
 });

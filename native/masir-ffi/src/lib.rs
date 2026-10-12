@@ -15,3 +15,6 @@ pub use bidi::masir_text_visual;
 pub mod processes;
 pub use processes::masir_list_processes;
 
+pub mod geo;
+pub use geo::{masir_geo_humanize, masir_geo_list};
+

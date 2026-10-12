@@ -42,19 +42,31 @@ $ masir stop
 Rules decide where traffic goes: through the active proxy (`proxy`), around it (`direct`), or nowhere (`block`). They are checked top to bottom, and the first match wins.
 
 ```console
+$ masir rules add             # build a rule step by step
+$ masir rules list
+$ masir rules edit <name>     # change any part from a menu
+$ masir rules rm <name>
+```
+
+`masir rules add` asks what the rule should match, then gives you a picker for each choice. Pickers filter as you type, and you can also type your own values:
+
+- **Websites:** geosite categories with readable names, such as 🇮🇷 Iranian Websites (`geosite:category-ir`) or AI (not China), or your own domains.
+- **IP addresses:** countries, private networks, or your own IPs and ranges.
+- **Apps:** an app together with all of its helper processes and data folders.
+- **Ports, network, protocol:** common choices, or your own.
+
+You then choose where the traffic goes; "a specific proxy…" pins the rule to one proxy and falls back to the active proxy if that proxy disappears. You also pick the rule's position, then review and save. masir checks the rule with `xray run -test` before saving, and a running xray picks it up right away.
+
+Every step also has a flag, for scripts:
+
+```console
 $ masir rules add --name iran --domain geosite:category-ir --ip geoip:ir -o direct
 $ masir rules add --name chrome --app "Google Chrome" -o direct
 $ masir rules add --name work --domain corp.example.com --via 0435aba7
-$ masir rules list
 $ masir rules edit iran --append --domain keyword:digikala
-$ masir rules rm chrome
 ```
 
-- **Match by domain** (`google.com`, `geosite:`, `domain:`, `full:`, `regexp:`, `keyword:`), **IP** (address, CIDR, `geoip:`), `--port`, `--network`, `--protocol`, `--source`, `--process` or `--app`. Flags can be repeated. `--json` takes any [xray rule object](https://xtls.github.io/config/routing.html#ruleobject).
-- **Apps:** `--app` with no name opens a picker. masir matches the app together with all of its helper processes, and offers to include programs the app started from elsewhere.
-- **Pin to one proxy:** `--via <id>`, or choose "a specific proxy…" when asked. If that proxy disappears from your subscriptions, the rule falls back to the active proxy.
-- **Edit:** a flag replaces that field, `--append` adds to it, and `--unset` removes it. `masir rules edit <name>` with no flags opens the rule in your editor.
-- **Safe to change:** masir checks every change with `xray run -test` before saving it, and a running xray picks it up right away.
+`--json` takes any [xray rule object](https://xtls.github.io/config/routing.html#ruleobject).
 
 ## Configuration
 

@@ -24,7 +24,9 @@ import {
   warnAboutBareAppNames,
   xrayRejection,
 } from "./shared.js";
-import type { Step } from "./shared.js";
+import type { RuleTarget, Step } from "./shared.js";
+import { runAddWizard } from "./wizard.js";
+import type { WizardPreset } from "./wizard.js";
 
 /** Matchers from `--json` or the flags (not both). */
 const readMatchers = (jsonText: string, rawArgs: readonly string[]): Step<RawRule> => {
@@ -109,6 +111,52 @@ const buildRule = async (
   return { ok: true, value: { position: position.value, rule: { createdAt: Date.now(), name: name.value, rule, via: target.value.via } } };
 };
 
+/** Flags given alongside the wizard fill their steps; the wizard asks for the rest. */
+const wizardPreset = async (args: AddArgs, existing: readonly UserRule[]): Promise<Step<WizardPreset>> => {
+  let name: string | undefined;
+  if (text(args.name).trim().length > 0) {
+    const checked = checkName(text(args.name).trim(), existing);
+    if (!checked.ok) {
+      return checked;
+    }
+    name = checked.value;
+  }
+  let target: RuleTarget | undefined;
+  if (text(args.outbound).length > 0 || text(args.via).length > 0) {
+    const resolved = await resolveTarget(text(args.outbound), text(args.via));
+    if (!resolved.ok) {
+      return resolved;
+    }
+    target = resolved.value;
+  }
+  const position = resolvePosition(text(args.position));
+  if (!position.ok) {
+    return position;
+  }
+  return { ok: true, value: { name, position: position.value, target } };
+};
+
+const addWithWizard = async (args: AddArgs, existing: readonly UserRule[]): Promise<void> => {
+  const preset = await wizardPreset(args, existing);
+  if (!preset.ok) {
+    fail(preset.error);
+    return;
+  }
+  const result = await runAddWizard(existing, preset.value);
+  if (!result) {
+    return;
+  }
+  try {
+    insertRule(result.rule, result.position);
+  } catch (error: unknown) {
+    fail(error instanceof Error ? error.message : String(error));
+    return;
+  }
+  const placed = loadRules().findIndex((stored) => stored.name === result.rule.name) + 1;
+  note(describeRule(result.rule, placed).join("\n"), "Rule added");
+  applyToDaemon();
+};
+
 export const rulesAddCommand = defineCommand({
   args: {
     ...MATCHER_ARGS,
@@ -119,12 +167,16 @@ export const rulesAddCommand = defineCommand({
     via: VIA_ARG,
   },
   meta: {
-    description: "Add a routing rule (xray rule fields as flags, or --json)",
+    description: "Add a routing rule: step by step in a terminal, or with flags / --json",
     name: "add",
   },
   async run({ args, rawArgs }) {
     warnAboutBareAppNames(rawArgs);
     const existing = loadRules();
+    if (process.stdin.isTTY && text(args.json).length === 0 && !usesMatcherFlags(rawArgs)) {
+      await addWithWizard(args, existing);
+      return;
+    }
     const built = await buildRule(args, rawArgs, existing);
     if (!built.ok) {
       fail(built.error);

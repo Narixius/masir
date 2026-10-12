@@ -1,5 +1,6 @@
 import pc from "picocolors";
 
+import { formatHumanName, humanizeGeoValue } from "../../services/geo/geo.js";
 import { findPinnedNode } from "../../services/rules/pins.js";
 import type { RuleOutbound, RuleVia, UserRule, XrayRuleJson } from "../../services/rules/schema.js";
 import { getAllOutbounds } from "../../services/subscription/storage.js";
@@ -12,6 +13,12 @@ const outboundText = (outbound: RuleOutbound): string => {
   return outbound === "direct" ? pc.green(outbound) : pc.cyan(outbound);
 };
 
+/** `geosite:category-ir` -> `geosite:category-ir (🇮🇷 Iranian Websites)`; other values unchanged. */
+const withHumanName = (value: string): string => {
+  const name = humanizeGeoValue(value);
+  return name ? `${value} ${pc.dim(`(${formatHumanName(name)})`)}` : value;
+};
+
 /** `[label, value]` per matcher, in the order people think about them. */
 export const matcherLines = (rule: XrayRuleJson): [string, string][] => {
   const lines: [string, string][] = [];
@@ -20,8 +27,8 @@ export const matcherLines = (rule: XrayRuleJson): [string, string][] => {
       lines.push([label, typeof value === "string" ? value : value.join(", ")]);
     }
   };
-  add("domain", rule.domain);
-  add("ip", rule.ip);
+  add("domain", rule.domain?.map(withHumanName));
+  add("ip", rule.ip?.map(withHumanName));
   add("port", rule.port);
   add("network", rule.network);
   add("process", rule.process);

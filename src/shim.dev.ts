@@ -180,7 +180,11 @@ executeDevGrpcCall(addr, method, reqJson)
     return bytes.length;
   };
   // -3 = not interactive: callers fall back to their default choice.
-  target.masirPromptLiveSelectStart = (_msg: string, _optionsJson: string, _defaultIdx: number): number => -3;
+  target.masirPromptLiveSelectStart = (_msg: string, _optionsJson: string, _defaultIdx: number, _flags: number): number => -3;
+  target.masirPromptLiveSelectSelection = (_out: Buffer): number => -2;
+  // Dev: no geo data decoding (the native build reads geosite.dat / geoip.dat).
+  target.masirGeoList = (_path: string, _kind: number, _out: Buffer): number => -2;
+  target.masirGeoHumanize = (_code: string, _out: Buffer): number => -2;
   target.masirPromptLiveSelectSet = (_idx: number, _text: string, _loading: number): number => -2;
   target.masirPromptLiveSelectPoll = (): number => -2;
   target.masirPromptLiveSelectViewport = (_out: Buffer): number => -2;

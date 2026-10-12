@@ -5,7 +5,7 @@
 // Programs an app starts from outside its bundle (updaters, language servers)
 // are found by walking the live process tree.
 import { spawnSync } from "node:child_process";
-import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { nativeSystem } from "../../native.js";
@@ -43,8 +43,6 @@ const BUFFER_GROWTH = 4;
 const MAX_ATTEMPTS = 3;
 const BUFFER_TOO_SMALL = -3;
 const BUNDLE_SUFFIX = ".app";
-const MAX_SCAN_DEPTH = 4;
-const MAX_SCAN_ENTRIES = 3000;
 
 const home = (): string => process.env["HOME"] ?? "";
 
@@ -236,45 +234,31 @@ const bundleIdentifier = (bundle: string): string | undefined => {
   return BUNDLE_ID_XML.exec(text)?.[1]?.trim();
 };
 
-/** What a path is, for the bounded executable scan. */
-const entryKind = (path: string): "executable" | "directory" | "other" => {
-  try {
-    const info = statSync(path);
-    if (info.isDirectory()) {
-      return "directory";
-    }
-    if (!info.isFile()) {
-      return "other";
-    }
-    // accessSync, not Stats.mode: scriptc has no lowering for the mode bits.
-    accessSync(path, constants.X_OK);
-    return "executable";
-  } catch {
-    return "other";
+/**
+ * Folders where macOS apps keep data, updaters and downloaded helpers, when
+ * they exist (as masir-v1 did). Electron apps update through `<id>.ShipIt`; a
+ * folder that never runs anything costs nothing as a rule entry.
+ */
+const dataFolders = (app: AppEntry): RelatedPath[] => {
+  const library = join(home(), "Library");
+  const id = bundleIdentifier(app.path);
+  const candidates: RelatedPath[] = [{ path: join(library, "Application Support", app.name), reason: "app data" }];
+  if (id) {
+    candidates.push(
+      { path: join(library, "Application Support", id), reason: "app data" },
+      { path: join(library, "Caches", id), reason: "cache" },
+      { path: join(library, "Caches", `${id}.ShipIt`), reason: "updater" },
+      { path: join(library, "Containers", id), reason: "sandbox data" }
+    );
   }
-};
-
-/** True if `dir` holds an executable file within a few levels (bounded scan: support dirs can be huge). */
-const containsExecutable = (dir: string): boolean => {
-  let seen = 0;
-  const walk = (path: string, depth: number): boolean => {
-    for (const entry of listDir(path)) {
-      seen += 1;
-      if (seen > MAX_SCAN_ENTRIES) {
-        return false;
-      }
-      const full = join(path, entry);
-      const kind = entryKind(full);
-      if (kind === "executable") {
-        return true;
-      }
-      if (kind === "directory" && depth < MAX_SCAN_DEPTH && walk(full, depth + 1)) {
-        return true;
-      }
+  const found: RelatedPath[] = [];
+  for (const candidate of candidates) {
+    const value = `${candidate.path}/`;
+    if (isDirectory(candidate.path) && !found.some((item) => item.path === value)) {
+      found.push({ path: value, reason: candidate.reason });
     }
-    return false;
-  };
-  return walk(dir, 1);
+  }
+  return found;
 };
 
 /** `~/Library/Application Support/<X>/...` collapses to `.../<X>/`: apps keep updaters and servers there. */
@@ -337,19 +321,9 @@ export const findRelated = (app: AppEntry, processes: readonly ProcessInfo[]): R
     related.set(folder ?? exe, folder ? `runs ${proc.name} from here` : `started by ${app.name}`);
   }
   if (app.bundle) {
-    const support = join(home(), "Library", "Application Support");
-    const id = bundleIdentifier(app.path);
-    const candidates: string[] = [];
-    for (const name of [id, app.name]) {
-      if (typeof name === "string" && name.length > 0) {
-        candidates.push(name);
-      }
-    }
-    for (const name of candidates) {
-      const dir = join(support, name);
-      const value = `${dir}/`;
-      if (!related.has(value) && isDirectory(dir) && containsExecutable(dir)) {
-        related.set(value, "app data folder with programs in it");
+    for (const folder of dataFolders(app)) {
+      if (!related.has(folder.path)) {
+        related.set(folder.path, folder.reason);
       }
     }
   }

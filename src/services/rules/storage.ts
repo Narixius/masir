@@ -86,8 +86,17 @@ export const insertRule = (rule: UserRule, position?: number): void => {
 export const withRuleReplaced = (rules: readonly UserRule[], name: string, rule: UserRule): UserRule[] =>
   rules.map((existing) => (existing.name === name ? rule : existing));
 
-/** Swap the rule named `name` for `rule` (which may carry a new name), keeping its position. */
-export const replaceRule = (name: string, rule: UserRule): void => {
+/** `rules` with the rule named `name` moved to 1-based `position` (last when undefined); does not save. */
+export const withRuleMoved = (rules: readonly UserRule[], name: string, position: number | undefined): UserRule[] => {
+  const rule = rules.find((existing) => existing.name === name);
+  return rule ? withRuleInserted(rules, rule, position) : [...rules];
+};
+
+/**
+ * Swap the rule named `name` for `rule` (which may carry a new name), keeping
+ * its position, or moving it to `position` when given (`"last"` for the end).
+ */
+export const replaceRule = (name: string, rule: UserRule, position?: number | "last"): void => {
   withRulesLock(() => {
     const rules = loadRules();
     if (!rules.some((existing) => existing.name === name)) {
@@ -96,7 +105,8 @@ export const replaceRule = (name: string, rule: UserRule): void => {
     if (rule.name !== name && rules.some((existing) => existing.name === rule.name)) {
       throw new Error(`A rule named "${rule.name}" already exists`);
     }
-    saveRules(withRuleReplaced(rules, name, rule));
+    const replaced = withRuleReplaced(rules, name, rule);
+    saveRules(position === undefined ? replaced : withRuleMoved(replaced, rule.name, position === "last" ? undefined : position));
   });
 };
 

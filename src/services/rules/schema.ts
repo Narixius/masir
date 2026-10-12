@@ -19,7 +19,7 @@ const WHITESPACE = /\s/u;
 
 const ipLiteral = z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()]);
 
-const isDomainValue = (value: string): boolean => {
+export const isDomainValue = (value: string): boolean => {
   if (value.length === 0 || WHITESPACE.test(value)) {
     return false;
   }
@@ -27,7 +27,7 @@ const isDomainValue = (value: string): boolean => {
   return colon === -1 || DOMAIN_TYPES.has(value.slice(0, colon));
 };
 
-const isIpValue = (value: string): boolean =>
+export const isIpValue = (value: string): boolean =>
   IP_PREFIXES.some((prefix) => value.startsWith(prefix) && value.length > prefix.length) || z.safeParse(ipLiteral, value).success;
 
 const isPortNumber = (text: string): boolean => {

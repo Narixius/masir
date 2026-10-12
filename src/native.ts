@@ -19,7 +19,10 @@ declare function masirPromptConfirm(message: string, defaultVal: number): number
 declare function masirPromptSelect(message: string, optionsJson: string, defaultIdx: number): number;
 declare function masirPromptMultiselect(message: string, optionsJson: string, defaultsJson: string, out: Buffer): number;
 declare function masirPromptText(message: string, defaultVal: string, out: Buffer): number;
-declare function masirPromptLiveSelectStart(message: string, optionsJson: string, defaultIdx: number): number;
+declare function masirPromptLiveSelectStart(message: string, optionsJson: string, defaultIdx: number, flags: number): number;
+declare function masirPromptLiveSelectSelection(out: Buffer): number;
+declare function masirGeoList(path: string, kind: number, out: Buffer): number;
+declare function masirGeoHumanize(code: string, out: Buffer): number;
 declare function masirPromptLiveSelectSet(idx: number, text: string, loading: number): number;
 declare function masirPromptLiveSelectPoll(): number;
 declare function masirPromptLiveSelectViewport(out: Buffer): number;
@@ -39,8 +42,9 @@ export const nativePrompts = {
   multiselect: (message: string, optionsJson: string, defaultsJson: string, out: Buffer): number =>
     masirPromptMultiselect(message, optionsJson, defaultsJson, out),
   text: (message: string, defaultVal: string, out: Buffer): number => masirPromptText(message, defaultVal, out),
-  liveSelectStart: (message: string, optionsJson: string, defaultIdx: number): number =>
-    masirPromptLiveSelectStart(message, optionsJson, defaultIdx),
+  liveSelectStart: (message: string, optionsJson: string, defaultIdx: number, flags: number): number =>
+    masirPromptLiveSelectStart(message, optionsJson, defaultIdx, flags),
+  liveSelectSelection: (out: Buffer): number => masirPromptLiveSelectSelection(out),
   liveSelectSet: (idx: number, text: string, loading: boolean): number => masirPromptLiveSelectSet(idx, text, loading ? 1 : 0),
   liveSelectPoll: (): number => masirPromptLiveSelectPoll(),
   liveSelectViewport: (out: Buffer): number => masirPromptLiveSelectViewport(out),
@@ -54,4 +58,11 @@ export const nativeText = {
 export const nativeSystem = {
   /** Running processes as JSON (`[{pid, ppid, name, exe}]`); bytes written, -3 if `out` is too small. */
   listProcesses: (out: Buffer): number => masirListProcesses(out),
+};
+
+export const nativeGeo = {
+  /** Categories of a geosite (kind 0) or geoip (kind 1) file as JSON; -3 if `out` is too small, -4 if unreadable. */
+  list: (path: string, kind: number, out: Buffer): number => masirGeoList(path, kind, out),
+  /** `{"label", "flag"?}` for a geosite/geoip code. */
+  humanize: (code: string, out: Buffer): number => masirGeoHumanize(code, out),
 };

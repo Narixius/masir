@@ -4,7 +4,7 @@ import pc from "picocolors";
 
 import type { ResponseOf } from "../../protocol.js";
 import { findApp, findRelated, listApps, listProcesses, ruleValuesFor } from "../../services/apps/apps.js";
-import type { AppEntry } from "../../services/apps/apps.js";
+import type { AppEntry, ProcessInfo } from "../../services/apps/apps.js";
 import { asRuleOutbound, isValidRuleName, normalizeNetwork, RULE_OUTBOUNDS } from "../../services/rules/schema.js";
 import type { RawRule, RuleOutbound, RuleVia, UserRule } from "../../services/rules/schema.js";
 import { checkRulesWithXray } from "../../services/rules/validate.js";
@@ -150,6 +150,32 @@ const pickApp = async (apps: readonly AppEntry[]): Promise<AppEntry | undefined>
 };
 
 /**
+ * Rule `process` values for an app: its bundle (all helpers) plus the related
+ * programs and data folders the user keeps (all of them outside a terminal).
+ */
+export const appProcessValues = async (app: AppEntry, processes: readonly ProcessInfo[]): Promise<string[]> => {
+  const values = ruleValuesFor(app);
+  log.step(`${pc.bold(terminalText(app.name))} ${pc.dim(`→ ${values.map(shortHome).join(", ")} (covers its helper processes)`)}`);
+  const related = findRelated(app, processes);
+  if (related.length === 0) {
+    return values;
+  }
+  let kept = related.map((item) => item.path);
+  if (process.stdin.isTTY) {
+    kept = await multiselectPrompt({
+      initialValues: kept,
+      message: `Also include programs and folders ${app.name} uses?`,
+      options: related.map((item) => ({ hint: item.reason, label: shortHome(item.path), value: item.path })),
+    });
+  } else {
+    for (const item of related) {
+      log.step(pc.dim(`also including ${shortHome(item.path)} (${item.reason})`));
+    }
+  }
+  return [...values, ...kept];
+};
+
+/**
  * The process values `--app` stands for: the app's bundle (all its helpers),
  * plus the related programs the user keeps (all, when not interactive).
  * `null` value when `--app` was not given.
@@ -177,25 +203,14 @@ export const resolveAppProcesses = async (rawArgs: readonly string[]): Promise<S
     return { error: `No app named "${query}". Run \`masir rules add --app\` in a terminal to pick one.`, ok: false };
   }
 
-  const values = ruleValuesFor(app);
-  log.step(`${pc.bold(terminalText(app.name))} ${pc.dim(`→ ${values.map(shortHome).join(", ")} (covers its helper processes)`)}`);
-  const related = findRelated(app, processes);
-  if (related.length === 0) {
-    return { ok: true, value: values };
-  }
-  let kept = related.map((item) => item.path);
-  if (process.stdin.isTTY) {
-    kept = await multiselectPrompt({
-      initialValues: kept,
-      message: `Also include programs ${app.name} uses?`,
-      options: related.map((item) => ({ hint: item.reason, label: shortHome(item.path), value: item.path })),
-    });
-  } else {
-    for (const item of related) {
-      log.step(pc.dim(`also including ${shortHome(item.path)} (${item.reason})`));
-    }
-  }
-  return { ok: true, value: [...values, ...kept] };
+  return { ok: true, value: await appProcessValues(app, processes) };
+};
+
+/** Pick an app interactively and return its process values; `null` if none was picked. */
+export const chooseAppProcesses = async (): Promise<string[] | null> => {
+  const processes = listProcesses();
+  const app = await pickApp(listApps(processes));
+  return app ? await appProcessValues(app, processes) : null;
 };
 
 /** Add process values to a raw rule's `process` list, without duplicates. */
