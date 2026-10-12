@@ -24,9 +24,9 @@ export const startCommand = defineCommand({
     },
   },
   meta: {
-    description: "start xray as daemon",
-    name: "start",
-    alias: ["connect"],
+    description: "Connect: start xray with the active proxy (--tun routes the whole system)",
+    name: "connect",
+    alias: ["start"],
   },
   async run({ args }) {
     if (args.assets) {

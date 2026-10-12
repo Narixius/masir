@@ -185,6 +185,7 @@ executeDevGrpcCall(addr, method, reqJson)
   // Dev: no geo data decoding (the native build reads geosite.dat / geoip.dat).
   target.masirGeoList = (_path: string, _kind: number, _out: Buffer): number => -2;
   target.masirGeoHumanize = (_code: string, _out: Buffer): number => -2;
+  target.masirGeoMatch = (_path: string, _kind: number, _code: string, _value: string): number => -2;
   target.masirPromptLiveSelectSet = (_idx: number, _text: string, _loading: number): number => -2;
   target.masirPromptLiveSelectPoll = (): number => -2;
   target.masirPromptLiveSelectViewport = (_out: Buffer): number => -2;

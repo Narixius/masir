@@ -4,6 +4,7 @@ import { rulesAddCommand } from "./add.js";
 import { rulesEditCommand } from "./edit.js";
 import { rulesListCommand } from "./list.js";
 import { rulesRmCommand } from "./rm.js";
+import { rulesTestCommand } from "./test.js";
 
 export const rulesCommand = defineCommand({
   meta: {
@@ -14,8 +15,7 @@ export const rulesCommand = defineCommand({
     add: rulesAddCommand,
     edit: rulesEditCommand,
     list: rulesListCommand,
-    ls: rulesListCommand,
     remove: rulesRmCommand,
-    rm: rulesRmCommand,
+    test: rulesTestCommand,
   },
 });

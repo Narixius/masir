@@ -193,7 +193,7 @@ const formatDaemonTree = (version: string, daemon: ResolvedDaemon): string => {
     : ` ${pc.red("○")} ${pc.red("Inactive")} ${pc.dim("(not running)")}`;
 
   if (!daemon.running) {
-    return renderTree(title, [`${pc.bold("Hint:")} Start with \`masir start\``]);
+    return renderTree(title, [`${pc.bold("Hint:")} Connect with \`masir connect\``]);
   }
 
   const items: string[] = [];
@@ -243,7 +243,7 @@ const formatXrayInactive = (xray: ResolvedXray, settings: Settings, daemonRunnin
     if (xray.logFile) {
       items.push(`${pc.bold("Log File:")} ${pc.dim(xray.logFile)} ${pc.dim("(tail with `masir logs`)")}`);
     }
-    items.push(`${pc.bold("Hint:")} Fix the configuration or conflict, then start with \`masir start\``);
+    items.push(`${pc.bold("Hint:")} Fix the configuration or conflict, then connect with \`masir connect\``);
     return renderTree(`${title} ${pc.red("●")} ${pc.red("Error")} ${pc.dim("(process crashed or exited with error)")}`, items);
   }
 
@@ -251,7 +251,7 @@ const formatXrayInactive = (xray: ResolvedXray, settings: Settings, daemonRunnin
     return renderTree(`${title} ${pc.yellow("○")} ${pc.yellow("Inactive")} ${pc.dim("(stopped)")}`, [
       `${pc.bold("Ports:")} Mixed ${pc.bold(String(settings.mixedPort))}, API ${pc.bold(String(settings.apiPort))}`,
       `${pc.bold("DNS:")} ${pc.bold(settings.dnsServers.join(", "))}`,
-      `${pc.bold("Hint:")} Start with \`masir start\` (or \`masir start -t\` for TUN mode)`,
+      `${pc.bold("Hint:")} Connect with \`masir connect\` (or \`masir connect --tun\` for the whole system)`,
     ]);
   }
   return renderTree(`${title} ${pc.dim(`○ Inactive (daemon inactive)`)}`, []);
@@ -320,7 +320,7 @@ export const statusCommand = defineCommand({
     },
   },
   meta: {
-    description: "display current status of masir daemon and xray core",
+    description: "Show the daemon, xray and connectivity status",
     name: "status",
   },
   async run({ args }) {

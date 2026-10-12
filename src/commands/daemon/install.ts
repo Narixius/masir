@@ -40,7 +40,7 @@ const relaunchWithSudo = (): never => {
   if (process.argv[1]?.endsWith(".ts")) {
     return fail("Build the native binary first (pnpm build); the service needs a compiled masir.");
   }
-  const result = spawnSync("sudo", ["env", `HOME=${home}`, `MASIR_ALLOWED_UID=${uid}`, process.execPath, "daemon", "install"], {
+  const result = spawnSync("sudo", ["env", `HOME=${home}`, `MASIR_ALLOWED_UID=${uid}`, process.execPath, "daemon", "enable"], {
     stdio: "inherit",
   });
   return process.exit(result.status ?? 1);
@@ -48,8 +48,9 @@ const relaunchWithSudo = (): never => {
 
 export const installCommand = defineCommand({
   meta: {
-    description: "Install the daemon as a root service (TUN mode then needs no password). Asks for sudo.",
-    name: "install",
+    description: "Run the daemon as a root system service, so TUN mode needs no password. Asks for sudo.",
+    name: "enable",
+    alias: ["install"],
   },
   run() {
     if (!isServiceSupported()) {
@@ -59,10 +60,10 @@ export const installCommand = defineCommand({
       relaunchWithSudo();
     }
 
-    // Root from here on: the user we serve was passed in by the sudo relaunch (or by `sudo masir daemon install`).
+    // Root from here on: the user we serve was passed in by the sudo relaunch (or by `sudo masir daemon enable`).
     const ownerUid = Number(process.env.MASIR_ALLOWED_UID ?? process.env.SUDO_UID);
     if (!(ownerUid > 0)) {
-      fail("Run `masir daemon install` as your normal user (not as root); it asks for sudo itself.");
+      fail("Run `masir daemon enable` as your normal user (not as root); it asks for sudo itself.");
     }
     const xray = resolveXrayPath();
     if (!xray) {
@@ -83,7 +84,7 @@ export const installCommand = defineCommand({
     spinner.start("Registering masir daemon as a system service...");
     try {
       installDaemonService(process.execPath, env);
-      spinner.stop(pc.green("Masir daemon installed as a service (runs as root, starts on boot)."));
+      spinner.stop(pc.green("Masir daemon enabled as a system service (runs as root, starts on boot)."));
       console.log(pc.dim(`\nIt will run xray from ${xray} as root; keep that file and your masir config secure.\n`));
     } catch (error) {
       spinner.error(pc.red(`Install failed: ${error instanceof Error ? error.message : String(error)}`));

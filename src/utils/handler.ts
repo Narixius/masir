@@ -72,7 +72,7 @@ const rootDaemonEnv = (ownerUid: number): string[] => {
 
 /**
  * Start the daemon detached. Privileged means root: directly when this CLI is
- * already root (`sudo masir start -t`), otherwise through `sudo`, which asks
+ * already root (`sudo masir connect --tun`), otherwise through `sudo`, which asks
  * for the password or Touch ID here in the terminal.
  */
 export const spawnDaemonProcess = (privileged = false): number => {
@@ -117,7 +117,7 @@ const printPrivilegeNotice = (): void => {
   const icon = pc.yellow("▲");
   const title = pc.bold(pc.yellow("Elevated Privileges Required"));
   const exe = pc.cyan(settings.xrayExecutable);
-  const cmd = pc.cyan("masir daemon install");
+  const cmd = pc.cyan("masir daemon enable");
 
   const lines: string[] = [
     `${icon}  ${title}`,

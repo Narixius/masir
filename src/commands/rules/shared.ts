@@ -290,7 +290,7 @@ export const resolveOutbound = async (given: string): Promise<Step<RuleOutbound>
 
 /** `--via`: pin a rule to one proxy node. */
 export const VIA_ARG = {
-  description: "pin the rule to one proxy by node id (ids show in `masir sub use`); if that proxy is removed, the active proxy is used",
+  description: "pin the rule to one proxy by node id (ids show in `masir use`); if that proxy is removed, the active proxy is used",
   type: "string",
 } as const;
 
@@ -318,7 +318,7 @@ export const resolveTarget = async (givenOutbound: string, givenVia: string): Pr
     }
     const node = getAllOutbounds().find((candidate) => candidate.outbound.id === viaText);
     if (!node) {
-      return { error: `No proxy with id "${viaText}". Node ids show in \`masir sub use\`.`, ok: false };
+      return { error: `No proxy with id "${viaText}". Node ids show in \`masir use\`.`, ok: false };
     }
     return { ok: true, value: { outbound: "proxy", via: pinTo(node) } };
   }
@@ -368,7 +368,7 @@ export const xrayRejection = (rules: readonly UserRule[]): string | null => {
 export const applyToDaemon = (): void => {
   const res = tryCallHelper<ResponseOf<"reload">>({ type: "reload" });
   if (!res) {
-    log.step(pc.dim("Takes effect the next time xray starts (`masir start`)."));
+    log.step(pc.dim("Takes effect the next time you connect (`masir connect`)."));
   } else if (res.ok) {
     log.step(pc.cyan("Applied: the running xray was reloaded with the new rules."));
   } else {

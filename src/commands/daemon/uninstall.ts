@@ -8,8 +8,9 @@ import { createSpinner } from "../../utils/spinner.js";
 
 export const uninstallCommand = defineCommand({
   meta: {
-    description: "Remove the masir daemon service. Asks for sudo.",
-    name: "uninstall",
+    description: "Stop running the daemon as a system service. Asks for sudo.",
+    name: "disable",
+    alias: ["uninstall"],
   },
   run() {
     if (!isServiceSupported()) {
@@ -21,7 +22,7 @@ export const uninstallCommand = defineCommand({
         console.error("Build the native binary first (pnpm build).");
         process.exit(1);
       }
-      const result = spawnSync("sudo", [process.execPath, "daemon", "uninstall"], { stdio: "inherit" });
+      const result = spawnSync("sudo", [process.execPath, "daemon", "disable"], { stdio: "inherit" });
       process.exit(result.status ?? 1);
     }
 

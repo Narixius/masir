@@ -16,6 +16,7 @@ export const rulesListCommand = defineCommand({
     },
   },
   meta: {
+    alias: ["ls"],
     description: "List routing rules in match order",
     name: "list",
   },

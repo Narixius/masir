@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { createLogger } from "evlog";
@@ -23,37 +23,76 @@ const findExeAssets = (exe: string): string | null => {
   return null;
 };
 
+/** masir's own xray folder (binary and geo data), where a future installer will put xray. */
+export const masirXrayDir = (): string => join(getAppDirs().data, "xray");
+
+interface XrayLocation {
+  /** Folder holding the `xray` binary. */
+  readonly bin: string;
+  /** Folder holding geoip.dat / geosite.dat. */
+  readonly share: string;
+}
+
+/** Where xray is normally installed on this OS, masir's own folder first. */
+const standardLocations = (): XrayLocation[] => {
+  const own = masirXrayDir();
+  const locations: XrayLocation[] = [{ bin: own, share: own }];
+  if (process.platform === "darwin") {
+    // Homebrew on Apple Silicon, then Homebrew on Intel / manual installs.
+    locations.push(
+      { bin: "/opt/homebrew/bin", share: "/opt/homebrew/share/xray" },
+      { bin: "/usr/local/bin", share: "/usr/local/share/xray" }
+    );
+  } else {
+    // xray's official install script, then distribution packages.
+    locations.push({ bin: "/usr/local/bin", share: "/usr/local/share/xray" }, { bin: "/usr/bin", share: "/usr/share/xray" });
+  }
+  return locations;
+};
+
+const isExecutableFile = (path: string): boolean => {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** `XRAY_EXECUTABLE`, else xray in a standard location, else `xray` from your PATH. */
+export const resolveXrayExecutable = (): string => {
+  const fromEnv = process.env["XRAY_EXECUTABLE"];
+  if (fromEnv) {
+    return fromEnv;
+  }
+  for (const location of standardLocations()) {
+    const candidate = join(location.bin, "xray");
+    if (isExecutableFile(candidate)) {
+      return candidate;
+    }
+  }
+  return "xray";
+};
+
+/**
+ * The geo data folder: the configured one if it has the files, else
+ * `XRAY_LOCATION_ASSET`, else a standard location, else next to the xray that
+ * is used (xray's own default). Without any, masir's own folder.
+ */
 export const resolveAssetsPath = (configuredPath?: string, executablePath?: string): string => {
   if (configuredPath && hasGeoData(configuredPath)) {
     return configuredPath;
   }
-
   const envAsset = process.env["XRAY_LOCATION_ASSET"];
   if (envAsset && hasGeoData(envAsset)) {
     return envAsset;
   }
-
-  const exe = executablePath ?? process.env["XRAY_EXECUTABLE"] ?? "xray";
-  const exeAsset = findExeAssets(exe);
-  if (exeAsset) {
-    return exeAsset;
-  }
-
-  const home = process.env["HOME"] ?? "";
-  const standardDirs: readonly string[] = [
-    "/Applications/masir.app/Contents/Resources/resources",
-    home.length > 0 ? join(home, "Library/Application Support/com.narixius.masir") : "",
-    "/opt/homebrew/share/xray",
-    "/usr/local/share/xray",
-  ];
-
-  for (const dir of standardDirs) {
-    if (dir.length > 0 && hasGeoData(dir)) {
-      return dir;
+  for (const location of standardLocations()) {
+    if (hasGeoData(location.share)) {
+      return location.share;
     }
   }
-
-  return configuredPath ?? "/usr/local/share/xray";
+  return findExeAssets(executablePath ?? resolveXrayExecutable()) ?? configuredPath ?? masirXrayDir();
 };
 
 /**
@@ -67,7 +106,7 @@ const defaults = {
   mixedPort: () => 8083,
   subUpdateIntervalMinutes: () => 720,
   xrayAssetsPath: () => resolveAssetsPath(process.env["XRAY_LOCATION_ASSET"]),
-  xrayExecutable: () => process.env["XRAY_EXECUTABLE"] ?? "xray",
+  xrayExecutable: resolveXrayExecutable,
 };
 
 const withDefault = <T extends z.ZodMiniType>(key: string, schema: T, fallback: () => z.output<T>) =>
@@ -134,5 +173,5 @@ export const writeSetting = (key: string, value?: SettingValue): Settings => {
   return loadSettings();
 };
 
-/** Persist the assets folder (`masir start --assets`). */
+/** Persist the assets folder (`masir connect --assets`). */
 export const saveAssetsPath = (path: string): Settings => writeSetting("xrayAssetsPath", path);

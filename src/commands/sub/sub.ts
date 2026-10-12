@@ -8,7 +8,7 @@ import { subUseCommand } from "./use.js";
 
 export const subCommand = defineCommand({
   meta: {
-    description: "Manage proxy subscriptions (add, update, list, remove, use)",
+    description: "Manage proxy subscriptions (add, list, update, remove)",
     name: "sub",
     alias: ["subscription", "subs"],
   },

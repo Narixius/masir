@@ -1,12 +1,16 @@
+import { setTimeout as sleep } from "node:timers/promises";
+
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
 import type { ResponseOf } from "../../protocol.js";
 import { getAllOutbounds, listSubscriptions, setActiveNode } from "../../services/subscription/storage.js";
+import type { NodeRef } from "../../services/subscription/storage.js";
 import { SUBSCRIPTION_FORMAT_VERSION } from "../../services/subscription/types.js";
 import { updateSubscriptions } from "../../services/subscription/updater.js";
 import { setExitCode } from "../../utils/exit-code.js";
 import { tryCallHelper } from "../../utils/ipc.js";
+import { createLatencyClient } from "../../utils/latency-client.js";
 import { log } from "../../utils/log.js";
 import { createSpinner } from "../../utils/spinner.js";
 import { displayLabel } from "../../utils/terminal-text.js";
@@ -37,8 +41,54 @@ const backfillRemarks = async (): Promise<void> => {
   }
 };
 
+/** Upper bound on waiting for latency tests: dead proxies time out after ~5 s each, 8 at a time. */
+const FASTEST_MAX_WAIT_MS = 120_000;
+const FASTEST_POLL_MS = 300;
+
+/** Test every proxy (latency service: daemon or in-process) and return the fastest that answered. */
+const findFastest = async (all: readonly NodeRef[]): Promise<NodeRef | undefined> => {
+  const ids: string[] = [];
+  for (const node of all) {
+    if (!ids.includes(node.outbound.id)) {
+      ids.push(node.outbound.id);
+    }
+  }
+  const latency = createLatencyClient();
+  const spinner = createSpinner();
+  spinner.start(`Testing ${ids.length} proxies...`);
+  try {
+    let entries = latency.probe(ids, true);
+    const deadline = Date.now() + FASTEST_MAX_WAIT_MS;
+    while (entries.some((entry) => entry.state === "pending") && Date.now() < deadline) {
+      // oxlint-disable-next-line eslint/no-await-in-loop
+      await sleep(FASTEST_POLL_MS);
+      entries = latency.probe(ids, false);
+      spinner.message(`Testing proxies... ${entries.filter((entry) => entry.state !== "pending").length}/${ids.length}`);
+    }
+    let best: { readonly id: string; readonly ms: number } | undefined;
+    for (const entry of entries) {
+      if (entry.state === "ok" && entry.ms !== undefined && (best === undefined || entry.ms < best.ms)) {
+        best = { id: entry.id, ms: entry.ms };
+      }
+    }
+    const node = best ? all.find((candidate) => candidate.outbound.id === best?.id) : undefined;
+    if (node && best) {
+      spinner.stop(pc.green(`Fastest: ${displayLabel(node.outbound)} (${best.ms}ms)`));
+    } else {
+      spinner.error(pc.red("No proxy responded."));
+    }
+    return node;
+  } finally {
+    await latency.close();
+  }
+};
+
 export const subUseCommand = defineCommand({
   args: {
+    fastest: {
+      description: "test every proxy and switch to the fastest, without asking",
+      type: "boolean",
+    },
     id: {
       description: "Short ID of the node to activate",
       required: false,
@@ -46,12 +96,13 @@ export const subUseCommand = defineCommand({
     },
   },
   meta: {
-    description: "Switch active outbound configuration",
+    description: "Switch the active proxy (latency shown live)",
     name: "use",
   },
   async run({ args }) {
     const requestedId = typeof args.id === "string" ? args.id.trim() : "";
-    if (requestedId.length === 0 && process.stdin.isTTY) {
+    const fastest = args.fastest === true;
+    if (requestedId.length === 0 && !fastest && process.stdin.isTTY) {
       await backfillRemarks();
     }
 
@@ -61,10 +112,20 @@ export const subUseCommand = defineCommand({
       return;
     }
 
-    const chosen =
-      requestedId.length > 0
-        ? all.find((node) => node.outbound.id === requestedId)
-        : await pickNode(all, "Choose active outbound configuration");
+    let chosen: NodeRef | undefined;
+    if (fastest) {
+      chosen = await findFastest(all);
+      if (!chosen) {
+        log.error(pc.red("No proxy responded; the active proxy was not changed."));
+        setExitCode(1);
+        return;
+      }
+    } else {
+      chosen =
+        requestedId.length > 0
+          ? all.find((node) => node.outbound.id === requestedId)
+          : await pickNode(all, "Choose active outbound configuration");
+    }
     if (!chosen) {
       log.error(pc.red(`Outbound node with ID "${requestedId}" not found in any subscription.`));
       setExitCode(1);

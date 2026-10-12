@@ -8,6 +8,7 @@
 // xray-schema config types statically and would treat them (and anything
 // stored next to them, like the child process) as dynamic values.
 import type { ChildProcess } from "node:child_process";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadSettings, resolveAssetsPath } from "../../config/settings.js";
@@ -166,6 +167,8 @@ const startOnce = async (targets: readonly ProbeTarget[], rejected: Map<string, 
   });
 
   const ready = await waitForPort(directPort, STARTUP_TIMEOUT_MS);
+  // xray has read its config by now (or failed): don't leave it behind.
+  rmSync(configPath, { force: true });
   if (ready && !exited.value) {
     const portById = new Map<string, number>();
     let i = 0;

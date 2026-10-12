@@ -4,6 +4,7 @@
 //!
 //!   masir_geo_list(path, kind, out)  -> bytes of JSON | -2 error | -3 buffer too small | -4 unreadable file
 //!   masir_geo_humanize(code, out)    -> bytes of {"label", "flag"?} JSON | -2 | -3
+//!   masir_geo_match(path, kind, code, value) -> 1 match | 0 no match | -2 error | -4 unreadable file
 //!
 //! `kind` 0 = geosite, 1 = geoip.
 
@@ -294,6 +295,122 @@ pub fn humanize_geoip_code(raw: &str) -> (String, Option<String>) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Matching (for `masir rules test`)                                          */
+/* -------------------------------------------------------------------------- */
+
+// Full entries: the listing types above skip the values to stay cheap.
+#[derive(Clone, PartialEq, Message)]
+struct FullDomain {
+    /// 0 plain (substring), 1 regex, 2 domain (itself or a subdomain), 3 full (exact).
+    #[prost(int32, tag = "1")]
+    kind: i32,
+    #[prost(string, tag = "2")]
+    value: String,
+    #[prost(message, repeated, tag = "3")]
+    attribute: Vec<Attribute>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct FullGeoSite {
+    #[prost(string, tag = "1")]
+    code: String,
+    #[prost(message, repeated, tag = "2")]
+    domain: Vec<FullDomain>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct FullGeoSiteList {
+    #[prost(message, repeated, tag = "1")]
+    entry: Vec<FullGeoSite>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct FullCidr {
+    #[prost(bytes = "vec", tag = "1")]
+    ip: Vec<u8>,
+    #[prost(uint32, tag = "2")]
+    prefix: u32,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct FullGeoIp {
+    #[prost(string, tag = "1")]
+    code: String,
+    #[prost(message, repeated, tag = "2")]
+    cidr: Vec<FullCidr>,
+    #[prost(bool, tag = "3")]
+    reverse_match: bool,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct FullGeoIpList {
+    #[prost(message, repeated, tag = "1")]
+    entry: Vec<FullGeoIp>,
+}
+
+fn domain_matches(rule: &FullDomain, domain: &str) -> bool {
+    let value = rule.value.to_lowercase();
+    match rule.kind {
+        0 => domain.contains(&value),
+        1 => regex_lite::Regex::new(&rule.value).is_ok_and(|re| re.is_match(domain)),
+        2 => domain == value || domain.ends_with(&format!(".{value}")),
+        _ => domain == value,
+    }
+}
+
+/// Does `domain` belong to `geosite:<code>[@attr]`?
+fn geosite_matches(bytes: &[u8], code: &str, domain: &str) -> Result<bool, prost::DecodeError> {
+    let (code, attr) = match code.split_once('@') {
+        Some((code, attr)) => (code, Some(attr.to_lowercase())),
+        None => (code, None),
+    };
+    let domain = domain.to_lowercase();
+    let list = FullGeoSiteList::decode(bytes)?;
+    let Some(site) = list.entry.iter().find(|site| site.code.eq_ignore_ascii_case(code)) else {
+        return Ok(false);
+    };
+    Ok(site
+        .domain
+        .iter()
+        .filter(|d| attr.as_ref().is_none_or(|attr| d.attribute.iter().any(|a| a.key.eq_ignore_ascii_case(attr))))
+        .any(|d| domain_matches(d, &domain)))
+}
+
+fn in_cidr(ip: &std::net::IpAddr, cidr: &FullCidr) -> bool {
+    let addr: Vec<u8> = match ip {
+        std::net::IpAddr::V4(v4) => v4.octets().to_vec(),
+        std::net::IpAddr::V6(v6) => v6.octets().to_vec(),
+    };
+    if addr.len() != cidr.ip.len() {
+        return false;
+    }
+    let bits = cidr.prefix as usize;
+    let full = bits / 8;
+    if addr[..full.min(addr.len())] != cidr.ip[..full.min(cidr.ip.len())] {
+        return false;
+    }
+    let rest = bits % 8;
+    rest == 0 || full >= addr.len() || (addr[full] ^ cidr.ip[full]) >> (8 - rest) == 0
+}
+
+/// Is `ip` in `geoip:<code>` (`!code` negates)?
+fn geoip_matches(bytes: &[u8], code: &str, ip: &str) -> Result<bool, prost::DecodeError> {
+    let (negated, code) = match code.strip_prefix('!') {
+        Some(rest) => (true, rest),
+        None => (false, code),
+    };
+    let Ok(ip) = ip.parse::<std::net::IpAddr>() else {
+        return Ok(false);
+    };
+    let list = FullGeoIpList::decode(bytes)?;
+    let Some(entry) = list.entry.iter().find(|entry| entry.code.eq_ignore_ascii_case(code)) else {
+        return Ok(false);
+    };
+    let inside = entry.cidr.iter().any(|cidr| in_cidr(&ip, cidr)) != entry.reverse_match;
+    Ok(inside != negated)
+}
+
+/* -------------------------------------------------------------------------- */
 /* FFI                                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -343,6 +460,26 @@ pub extern "C" fn masir_geo_humanize(code: *const u8, code_len: usize, out: *mut
     .unwrap_or(ERROR)
 }
 
+/// Does `value` (a domain for kind 0, an IP for kind 1) belong to category `code` of the file at `path`?
+#[unsafe(no_mangle)]
+pub extern "C" fn masir_geo_match(path: *const u8, path_len: usize, kind: u32, code: *const u8, code_len: usize, value: *const u8, value_len: usize) -> i32 {
+    catch_unwind(AssertUnwindSafe(|| {
+        let (Some(path), Some(code), Some(value)) = (parse_str(path, path_len), parse_str(code, code_len), parse_str(value, value_len)) else {
+            return ERROR;
+        };
+        let Ok(bytes) = std::fs::read(path) else {
+            return UNREADABLE;
+        };
+        let matched = if kind == 0 { geosite_matches(&bytes, code, value) } else { geoip_matches(&bytes, code, value) };
+        match matched {
+            Ok(true) => 1,
+            Ok(false) => 0,
+            Err(_) => ERROR,
+        }
+    }))
+    .unwrap_or(ERROR)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +511,36 @@ mod tests {
         assert_eq!(humanize_geoip_code("private"), ("Private networks (LAN)".into(), None));
         assert_eq!(humanize_geoip_code("geoip:!cn"), ("Not China".into(), None));
         assert_eq!(humanize_geoip_code("telegram"), ("Telegram".into(), None));
+    }
+
+    #[test]
+    fn matches_domains_and_ips() {
+        let site = FullGeoSiteList {
+            entry: vec![FullGeoSite {
+                code: "GOOGLE".into(),
+                domain: vec![
+                    FullDomain { kind: 2, value: "google.com".into(), attribute: vec![] },
+                    FullDomain { kind: 3, value: "only.example".into(), attribute: vec![Attribute { key: "cn".into() }] },
+                    FullDomain { kind: 1, value: r"^ads\d+\.x$".into(), attribute: vec![] },
+                ],
+            }],
+        };
+        let bytes = site.encode_to_vec();
+        assert!(geosite_matches(&bytes, "google", "www.google.com").unwrap());
+        assert!(geosite_matches(&bytes, "google", "google.com").unwrap());
+        assert!(!geosite_matches(&bytes, "google", "notgoogle.com").unwrap());
+        assert!(geosite_matches(&bytes, "google@cn", "only.example").unwrap());
+        assert!(!geosite_matches(&bytes, "google@cn", "google.com").unwrap());
+        assert!(geosite_matches(&bytes, "google", "ads42.x").unwrap());
+
+        let ip = FullGeoIpList {
+            entry: vec![FullGeoIp { code: "PRIVATE".into(), cidr: vec![FullCidr { ip: vec![10, 0, 0, 0], prefix: 8 }, FullCidr { ip: vec![192, 168, 0, 0], prefix: 16 }], reverse_match: false }],
+        };
+        let bytes = ip.encode_to_vec();
+        assert!(geoip_matches(&bytes, "private", "10.1.2.3").unwrap());
+        assert!(geoip_matches(&bytes, "private", "192.168.9.9").unwrap());
+        assert!(!geoip_matches(&bytes, "private", "8.8.8.8").unwrap());
+        assert!(geoip_matches(&bytes, "!private", "8.8.8.8").unwrap());
     }
 
     #[test]

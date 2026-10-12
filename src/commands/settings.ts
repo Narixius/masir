@@ -36,7 +36,7 @@ const apply = (spec: SettingSpec): void => {
   }
   const res = tryCallHelper<ResponseOf<"reload">>({ type: "reload" });
   if (!res) {
-    log.step(pc.dim("Takes effect the next time xray starts (`masir start`)."));
+    log.step(pc.dim("Takes effect the next time you connect (`masir connect`)."));
   } else if (res.ok) {
     log.step(pc.cyan("Applied: a running xray was reloaded."));
   } else {
@@ -136,7 +136,7 @@ const settingsMenu = async (): Promise<void> => {
 };
 
 const settingsListCommand = defineCommand({
-  meta: { description: "Show every setting and its value", name: "list" },
+  meta: { alias: ["ls"], description: "Show every setting and its value", name: "list" },
   run() {
     listSettings();
   },
@@ -187,6 +187,7 @@ const settingsResetCommand = defineCommand({
 
 export const settingsCommand = defineCommand({
   meta: {
+    alias: ["config"],
     description: "View and change settings (ports, xray paths, DNS, refresh interval)",
     name: "settings",
   },
@@ -204,7 +205,6 @@ export const settingsCommand = defineCommand({
   subCommands: {
     get: settingsGetCommand,
     list: settingsListCommand,
-    ls: settingsListCommand,
     reset: settingsResetCommand,
     set: settingsSetCommand,
   },

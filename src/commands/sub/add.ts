@@ -20,10 +20,55 @@ import { confirmPrompt, liveSelectPrompt, textPrompt } from "../../utils/prompts
 import { createSpinner } from "../../utils/spinner.js";
 import { displayLabel } from "../../utils/terminal-text.js";
 
+/** Host labels that say nothing about the provider. */
+const GENERIC_HOST_LABELS: ReadonlySet<string> = new Set([
+  "api",
+  "app",
+  "cdn",
+  "dash",
+  "dashboard",
+  "get",
+  "link",
+  "links",
+  "my",
+  "panel",
+  "portal",
+  "s",
+  "sub",
+  "subs",
+  "subscription",
+  "www",
+]);
+
+const IP_HOST = /^[\d.]+$/u;
+
+/** A free name from the URL's host: `https://sub.example.net/abc` -> `example`. */
+const suggestSubscriptionName = (url: string): string => {
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    // not a URL: fall back below
+  }
+  const labels = host.split(".").filter((label) => label.length > 0);
+  // Skip generic labels and the TLD; an IP address keeps its full form.
+  const meaningful = labels.slice(0, -1).find((label) => !GENERIC_HOST_LABELS.has(label));
+  let raw = meaningful ?? labels[0] ?? "subscription";
+  if (IP_HOST.test(host)) {
+    raw = host;
+  }
+  const base = raw.replaceAll(/[^a-z0-9_-]+/gu, "-");
+  let name = base;
+  for (let n = 2; getSubscription(name) !== null || findNameConflict(name) !== undefined; n += 1) {
+    name = `${base}-${n}`;
+  }
+  return name;
+};
+
 export const subAddCommand = defineCommand({
   args: {
     name: {
-      description: "Name identifier for the subscription",
+      description: "a name for the subscription (default: suggested from the URL)",
       type: "string",
     },
     url: {
@@ -37,38 +82,26 @@ export const subAddCommand = defineCommand({
     name: "add",
   },
   async run({ args }) {
-    let name = typeof args.name === "string" ? args.name.trim() : "";
-    if (name.length === 0) {
-      if (!process.stdin.isTTY) {
-        log.error(pc.red("Missing required --name option."));
-        setExitCode(1);
-        return;
-      }
-      const nameInput = await textPrompt({
-        message: "Enter subscription name",
-        placeholder: "e.g. premium-vip",
-      });
-      if (nameInput.trim().length === 0) {
-        return;
-      }
-      name = nameInput.trim();
-    }
-
     let url = typeof args.url === "string" ? args.url.trim() : "";
     if (url.length === 0) {
       if (!process.stdin.isTTY) {
-        log.error(pc.red("Missing required subscription URL."));
+        log.error(pc.red("Missing the subscription URL: `masir sub add <url>`."));
         setExitCode(1);
         return;
       }
-      const urlInput = await textPrompt({
-        message: "Enter subscription URL",
-        placeholder: "https://...",
-      });
+      const urlInput = await textPrompt({ message: "Subscription URL", placeholder: "https://..." });
       if (urlInput.trim().length === 0) {
         return;
       }
       url = urlInput.trim();
+    }
+
+    let name = typeof args.name === "string" ? args.name.trim() : "";
+    if (name.length === 0) {
+      const suggestion = suggestSubscriptionName(url);
+      // Outside a terminal the suggestion is used as-is.
+      const typed = process.stdin.isTTY ? await textPrompt({ defaultValue: suggestion, message: "Name", placeholder: suggestion }) : "";
+      name = typed.trim() || suggestion;
     }
 
     if (getSubscription(name)) {

@@ -100,3 +100,9 @@ export const humanizeGeoValue = (value: string): HumanName | null => {
 
 /** "🇮🇷 Iranian Websites" / "Ads All". */
 export const formatHumanName = (name: HumanName): string => (name.flag ? `${name.flag} ${name.label}` : name.label);
+
+/** Whether `value` (a domain for geosite, an IP for geoip) is in `code` (`google@cn`, `!cn`); `null` if unknown. */
+export const geoMatches = (kind: GeoKind, code: string, value: string): boolean | null => {
+  const result = nativeGeo.match(dataFile(kind), kind === "geosite" ? 0 : 1, code, value);
+  return result < 0 ? null : result === 1;
+};

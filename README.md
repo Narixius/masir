@@ -13,29 +13,39 @@ $ sudo mv masir /usr/local/bin/
 
 Builds are available for macOS (`darwin-arm64`, `darwin-x64`) and Linux (`linux-x64-gnu`, `linux-arm64-gnu`).
 
-masir runs xray for you. [Install xray](https://github.com/XTLS/Xray-core/releases) and make sure `xray` is on your `PATH`, or set `XRAY_EXECUTABLE`.
+masir runs xray for you. [Install xray](https://github.com/XTLS/Xray-core/releases) and masir finds it, along with its `geoip.dat` and `geosite.dat`, in the usual places. It checks these in order:
+
+| Where | macOS | Linux |
+| --- | --- | --- |
+| masir's own folder (`xray` and the `.dat` files) | `~/Library/Application Support/masir/xray/` | `~/.local/share/masir/xray/` |
+| Standard installs | `/opt/homebrew/bin`, `/usr/local/bin` (`…/share/xray`) | `/usr/local/bin`, `/usr/bin` (`…/share/xray`) |
+| Your `PATH` | `xray`, with the `.dat` files next to it | same |
+
+Anywhere else: `masir settings set xrayExecutable /path/to/xray`.
 
 ## Quick start
 
 ```console
-$ masir sub add --name work https://example.com/sub    # add a subscription
-$ masir sub use                                        # pick a proxy (latency shows live)
-$ masir start                                          # local proxy on 127.0.0.1:8083
-$ masir status                                         # daemon, xray, and a connectivity check
-$ masir stop
+$ masir sub add https://example.com/sub    # add a subscription
+$ masir use                                # pick a proxy (latency shows live)
+$ masir connect                            # local proxy on 127.0.0.1:8083
+$ masir status                             # daemon, xray, and a connectivity check
+$ masir disconnect
 ```
 
-`127.0.0.1:8083` accepts both HTTP and SOCKS5. To route the whole system instead, run `masir start --tun`. It asks for your password; run `masir daemon install` once to skip that from then on.
+`127.0.0.1:8083` accepts both HTTP and SOCKS5. To route the whole system instead, run `masir connect --tun`. It asks for your password; run `masir daemon enable` once to skip that from then on.
+
+`masir use --fastest` tests every proxy and switches to the quickest one.
 
 ## Subscriptions
 
-| Command                             | What it does                                                      |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| `masir sub add --name <name> <url>` | Add a subscription and choose a proxy from it                     |
-| `masir sub use [id]`                | Switch the active proxy (grouped by subscription, type to filter) |
-| `masir sub list`                    | Subscriptions with traffic used and expiry                        |
-| `masir sub update [--name <name>]`  | Refresh now (masir also refreshes in the background)              |
-| `masir sub rm [name...]`            | Remove subscriptions                                              |
+| Command                               | What it does                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| `masir sub add <url> [--name <name>]` | Add a subscription (named after its host unless you name it) and choose a proxy |
+| `masir use [id] [--fastest]`          | Switch the active proxy (grouped by subscription, type to filter)               |
+| `masir sub list`                      | Subscriptions with traffic used and expiry                                      |
+| `masir sub update [--name <name>]`    | Refresh now (masir also refreshes in the background)                            |
+| `masir sub rm [name...]`              | Remove subscriptions                                                            |
 
 ## Rules
 
@@ -46,6 +56,7 @@ $ masir rules add             # build a rule step by step
 $ masir rules list
 $ masir rules edit <name>     # change any part from a menu
 $ masir rules rm <name>
+$ masir rules test youtube.com     # which rule routes it, and where
 ```
 
 `masir rules add` asks what the rule should match, then gives you a picker for each choice. Pickers filter as you type, and you can also type your own values:
@@ -68,6 +79,8 @@ $ masir rules edit iran --append --domain keyword:digikala
 
 `--json` takes any [xray rule object](https://xtls.github.io/config/routing.html#ruleobject).
 
+`masir rules test <domain or IP>` walks the rules the way xray does and shows the one that applies. Add `--port`, `--network`, `--process` or `--protocol` to test a specific connection.
+
 ## Configuration
 
 | What                             | macOS                                     | Linux                         |
@@ -76,7 +89,7 @@ $ masir rules edit iran --append --domain keyword:digikala
 | Subscriptions and rules          | `~/Library/Application Support/masir/`    | `~/.local/share/masir/`       |
 | Logs (`masir logs` tails xray's) | `~/Library/Logs/masir/`                   | `~/.local/state/masir/`       |
 
-Change settings with `masir settings`. In a terminal it opens a menu; for scripts there's `masir settings set mixedPort 9090`, plus `get`, `reset` and `list`. Values are checked before they're saved, and a running xray picks the change up.
+Change settings with `masir settings` (or `masir config`). In a terminal it opens a menu; for scripts there's `masir settings set mixedPort 9090`, plus `get`, `reset` and `list`. Values are checked before they're saved, and a running xray picks the change up.
 
 Settings (all optional):
 
@@ -87,7 +100,7 @@ Settings (all optional):
 | `dnsServers`               | `["1.1.1.1", "8.8.8.8"]` | DNS servers in TUN mode                   |
 | `gateway`                  | `"10.10.20.1/24"`        | TUN interface address                     |
 | `subUpdateIntervalMinutes` | `720`                    | How often subscriptions refresh           |
-| `xrayExecutable`           | `xray`                   | Path to the xray binary                   |
+| `xrayExecutable`           | found automatically      | Path to the xray binary                   |
 | `xrayAssetsPath`           | found automatically      | Folder with `geoip.dat` and `geosite.dat` |
 
 Environment variables:
@@ -95,6 +108,8 @@ Environment variables:
 - `XRAY_EXECUTABLE` and `XRAY_LOCATION_ASSET` override the two xray settings above.
 - `MASIR_SOCKET` sets the daemon's socket path.
 - `MASIR_BIDI=on|off` controls reordering of right-to-left text (Persian, Arabic, Hebrew). By default masir reorders it only in terminals that don't do so themselves.
+
+For shell completion, add `source <(masir completion zsh)` to your `~/.zshrc`. `bash`, `fish` and `powershell` work too.
 
 ## Build from source
 

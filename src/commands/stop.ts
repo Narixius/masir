@@ -9,9 +9,9 @@ import { renderStatusTree } from "./status.js";
 
 export const stopCommand = defineCommand({
   meta: {
-    description: "stop running xray process",
-    name: "stop",
-    alias: ["disconnect"],
+    description: "Disconnect: stop xray (the daemon keeps running)",
+    name: "disconnect",
+    alias: ["stop"],
   },
   run() {
     const spinner = createSpinner();

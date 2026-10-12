@@ -20,7 +20,8 @@ const daemonOwnerUid = (): number => {
 
 export const runDaemonCommand = defineCommand({
   meta: {
-    description: "Run the masir daemon as the current user",
+    description: "Run the masir daemon in the foreground (masir starts it for you)",
+    hidden: true,
     name: "run",
   },
   run() {

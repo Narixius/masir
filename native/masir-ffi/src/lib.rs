@@ -16,5 +16,5 @@ pub mod processes;
 pub use processes::masir_list_processes;
 
 pub mod geo;
-pub use geo::{masir_geo_humanize, masir_geo_list};
+pub use geo::{masir_geo_humanize, masir_geo_list, masir_geo_match};
 

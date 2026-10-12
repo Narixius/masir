@@ -140,6 +140,12 @@
       "symbol": "masir_terminal_columns",
       "params": [],
       "returns": "i32"
+    },
+    {
+      "name": "masirGeoMatch",
+      "symbol": "masir_geo_match",
+      "params": ["string", "u32", "string", "string"],
+      "returns": "i32"
     }
   ],
   "libraries": ["../native/lib/libmasir_ffi.a"],

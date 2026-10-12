@@ -70,7 +70,7 @@ const follow = async (logFile: string): Promise<void> => {
 
 export const logsCommand = defineCommand({
   meta: {
-    description: "tail the xray logs (xray must be running)",
+    description: "Follow xray's log (while connected)",
     name: "logs",
   },
   async run() {
@@ -82,7 +82,7 @@ export const logsCommand = defineCommand({
       status = undefined;
     }
     if (!status?.xray.running || !status.xray.logFile) {
-      console.error("xray is not running. Start it with `masir start`.");
+      console.error("xray is not running. Connect with `masir connect`.");
       process.exit(1);
     }
 

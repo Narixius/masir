@@ -15,7 +15,7 @@ export interface RunXrayOptions {
 export const runXray = async (options?: RunXrayOptions): Promise<ReconcileResult> => {
   const activeNode = getActiveNode();
   if (!activeNode) {
-    throw new Error("No active proxy. Run `masir sub use` first.");
+    throw new Error("No active proxy. Pick one with `masir use`.");
   }
   const settings = options?.assetsPath ? saveAssetsPath(options.assetsPath) : loadSettings();
   const tun = Boolean(options?.tun);

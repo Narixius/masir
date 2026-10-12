@@ -56,7 +56,7 @@ export const verdictFor = (diagnosis: NetDiagnosis, issue?: string): Verdict | u
   const internet = isOk(diagnosis.direct);
   if (!diagnosis.proxy) {
     return internet
-      ? { level: "warn", text: "Your internet works; no proxy is selected (`masir sub use`)." }
+      ? { level: "warn", text: "Your internet works; no proxy is selected (`masir use`)." }
       : { level: "error", text: "No internet connection." };
   }
   const proxy = isOk(diagnosis.proxy);
@@ -67,7 +67,7 @@ export const verdictFor = (diagnosis: NetDiagnosis, issue?: string): Verdict | u
     return { level: "ok", text: "The proxy works (direct internet access looks restricted)." };
   }
   if (internet) {
-    const hint = issue ?? "Try another proxy with `masir sub use`.";
+    const hint = issue ?? "Try another proxy with `masir use`.";
     return { level: "error", text: `Your internet works, but the proxy isn't responding. ${hint}` };
   }
   return { level: "error", text: "No internet connection: both the direct and the proxy checks failed." };

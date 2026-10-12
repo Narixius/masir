@@ -17,7 +17,7 @@ export const subListCommand = defineCommand({
     const active = getActiveNode();
 
     if (subs.length === 0) {
-      log.info("No subscriptions found. Add one with `masir sub add --name <name> <url>`.");
+      log.info("No subscriptions found. Add one with `masir sub add <url>`.");
       return;
     }
 

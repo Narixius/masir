@@ -17,8 +17,9 @@ export const rulesRmCommand = defineCommand({
     },
   },
   meta: {
+    alias: ["rm"],
     description: "Remove one or more routing rules",
-    name: "rm",
+    name: "remove",
   },
   async run({ args }) {
     const rules = loadRules();

@@ -8,14 +8,14 @@ import { uninstallCommand } from "./uninstall.js";
 
 export const daemonCommand = defineCommand({
   meta: {
-    description: "Run, install or remove the masir daemon",
+    description: "Manage the background daemon (and its system service for TUN mode)",
     name: "daemon",
   },
   subCommands: {
-    install: installCommand,
+    disable: uninstallCommand,
+    enable: installCommand,
     restart: restartDaemonCommand,
     run: runDaemonCommand,
     stop: stopDaemonCommand,
-    uninstall: uninstallCommand,
   },
 });

@@ -23,6 +23,7 @@ declare function masirPromptLiveSelectStart(message: string, optionsJson: string
 declare function masirPromptLiveSelectSelection(out: Buffer): number;
 declare function masirGeoList(path: string, kind: number, out: Buffer): number;
 declare function masirGeoHumanize(code: string, out: Buffer): number;
+declare function masirGeoMatch(path: string, kind: number, code: string, value: string): number;
 declare function masirPromptLiveSelectSet(idx: number, text: string, loading: number): number;
 declare function masirPromptLiveSelectPoll(): number;
 declare function masirPromptLiveSelectViewport(out: Buffer): number;
@@ -68,4 +69,6 @@ export const nativeGeo = {
   list: (path: string, kind: number, out: Buffer): number => masirGeoList(path, kind, out),
   /** `{"label", "flag"?}` for a geosite/geoip code. */
   humanize: (code: string, out: Buffer): number => masirGeoHumanize(code, out),
+  /** 1 when `value` (domain / IP) is in category `code`, 0 when not, < 0 on error. */
+  match: (path: string, kind: number, code: string, value: string): number => masirGeoMatch(path, kind, code, value),
 };
