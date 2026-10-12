@@ -61,13 +61,8 @@ const hasKind = (rule: RuleInput, kind: MatcherKind): boolean => {
 
 const orUndefined = <T>(values: T[]): T[] | undefined => (values.length > 0 ? values : undefined);
 
-/** Ask which kinds of match the rule uses, then run each kind's picker (current values pre-selected). */
-export const chooseMatchers = async (current: RuleInput): Promise<RuleInput> => {
-  const kinds = await multiselectPrompt<MatcherKind>({
-    initialValues: KINDS.filter((item) => hasKind(current, item.kind)).map((item) => item.kind),
-    message: "What should this rule match?",
-    options: KINDS.map((item) => ({ hint: item.hint, label: item.label, value: item.kind })),
-  });
+/** Run the picker of each chosen kind; kinds not chosen are dropped. */
+const pickForKinds = async (kinds: readonly MatcherKind[], current: RuleInput): Promise<RuleInput> => {
   // Fields the wizard has no picker for (user, inboundTag, attrs) carry over.
   const next: RuleInput = { attrs: current.attrs, inboundTag: current.inboundTag, user: current.user };
   for (const kind of kinds) {
@@ -118,6 +113,36 @@ export const chooseMatchers = async (current: RuleInput): Promise<RuleInput> => 
     }
   }
   return next;
+};
+
+const kindsOf = (rule: RuleInput): MatcherKind[] => KINDS.filter((item) => hasKind(rule, item.kind)).map((item) => item.kind);
+
+/**
+ * Ask which kinds of match the rule uses, then run each kind's picker
+ * (current values pre-selected). A rule must match something, so this repeats
+ * until at least one kind is chosen and at least one value picked.
+ */
+export const chooseMatchers = async (current: RuleInput): Promise<RuleInput> => {
+  let preselected = kindsOf(current);
+  for (;;) {
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    const kinds = await multiselectPrompt<MatcherKind>({
+      initialValues: preselected,
+      message: "What should this rule match?",
+      options: KINDS.map((item) => ({ hint: item.hint, label: item.label, value: item.kind })),
+    });
+    if (kinds.length === 0) {
+      log.warn(pc.yellow("Choose at least one: Space selects, Enter confirms."));
+      continue;
+    }
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    const next = await pickForKinds(kinds, current);
+    if (kindsOf(next).length > 0) {
+      return next;
+    }
+    log.warn(pc.yellow("Nothing was picked, so the rule would match nothing. Choose what it should match."));
+    preselected = kinds;
+  }
 };
 
 /** 1-based position among `others` (rules besides this one); `undefined` = last. */
