@@ -9,6 +9,7 @@ import "./native.js";
 import { daemonCommand } from "./commands/daemon/daemon.js";
 import { logsCommand } from "./commands/logs.js";
 import { rulesCommand } from "./commands/rules/rules.js";
+import { settingsCommand } from "./commands/settings.js";
 import { startCommand } from "./commands/start.js";
 import { statusCommand } from "./commands/status.js";
 import { stopCommand } from "./commands/stop.js";
@@ -33,6 +34,7 @@ const masirCli = defineCommand({
     sub: subCommand,
     logs: logsCommand,
     rules: rulesCommand,
+    settings: settingsCommand,
     daemon: daemonCommand,
     // latency: latencyCommand, // masir latency --all
   },

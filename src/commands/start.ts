@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
-import { saveSettings } from "../config/settings.js";
+import { saveAssetsPath } from "../config/settings.js";
 import type { ResponseOf } from "../protocol.js";
 import { ensureHandlerIsReady } from "../utils/handler.js";
 import { callHelper } from "../utils/ipc.js";
@@ -30,7 +30,7 @@ export const startCommand = defineCommand({
   },
   async run({ args }) {
     if (args.assets) {
-      saveSettings({ xrayAssetsPath: String(args.assets) });
+      saveAssetsPath(String(args.assets));
     }
 
     const isTun = Boolean(args.tun);

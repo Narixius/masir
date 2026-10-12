@@ -76,7 +76,9 @@ $ masir rules edit iran --append --domain keyword:digikala
 | Subscriptions and rules          | `~/Library/Application Support/masir/`    | `~/.local/share/masir/`       |
 | Logs (`masir logs` tails xray's) | `~/Library/Logs/masir/`                   | `~/.local/state/masir/`       |
 
-Settings in `config.json` (all optional):
+Change settings with `masir settings`. In a terminal it opens a menu; for scripts there's `masir settings set mixedPort 9090`, plus `get`, `reset` and `list`. Values are checked before they're saved, and a running xray picks the change up.
+
+Settings (all optional):
 
 | Key                        | Default                  | Meaning                                   |
 | -------------------------- | ------------------------ | ----------------------------------------- |

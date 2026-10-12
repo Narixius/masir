@@ -94,9 +94,10 @@ const SettingsSchema = z.object({
 
 export type Settings = z.infer<typeof SettingsSchema>;
 
-const configFilePath = (): string => join(getAppDirs().config, "config.json");
+export const configFilePath = (): string => join(getAppDirs().config, "config.json");
 
-const readRawSettings = (): Record<string, unknown> => {
+/** What `config.json` holds, as written (keys you set; anything missing uses its default). */
+export const readRawSettings = (): Record<string, unknown> => {
   const path = configFilePath();
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
@@ -111,19 +112,27 @@ const readRawSettings = (): Record<string, unknown> => {
 
 export const loadSettings = (): Settings => z.parse(SettingsSchema, readRawSettings());
 
-/** Merge `changes` over the current settings, validate, and persist. */
-export const saveSettings = (changes: Partial<Settings>): Settings => {
-  const current = loadSettings();
-  // Field by field on purpose: scriptc cannot compile spreads of the zod-inferred type.
-  const merged = z.parse(SettingsSchema, {
-    apiPort: changes.apiPort ?? current.apiPort,
-    dnsServers: changes.dnsServers ?? current.dnsServers,
-    gateway: changes.gateway ?? current.gateway,
-    mixedPort: changes.mixedPort ?? current.mixedPort,
-    subUpdateIntervalMinutes: changes.subUpdateIntervalMinutes ?? current.subUpdateIntervalMinutes,
-    xrayAssetsPath: changes.xrayAssetsPath ?? current.xrayAssetsPath,
-    xrayExecutable: changes.xrayExecutable ?? current.xrayExecutable,
-  });
-  writeFileEnsured(configFilePath(), JSON.stringify(merged, null, 2));
-  return merged;
+/** A value `config.json` can hold. */
+export type SettingValue = number | string | string[];
+
+/**
+ * Set (or without a value, remove) one key in `config.json`. Only keys the
+ * user set are written, so unset ones keep following their live default
+ * (e.g. the auto-detected assets path).
+ */
+export const writeSetting = (key: string, value?: SettingValue): Settings => {
+  const next: Record<string, unknown> = {};
+  for (const [existing, existingValue] of Object.entries(readRawSettings())) {
+    if (existing !== key) {
+      next[existing] = existingValue;
+    }
+  }
+  if (value !== undefined) {
+    next[key] = value;
+  }
+  writeFileEnsured(configFilePath(), JSON.stringify(next, null, 2));
+  return loadSettings();
 };
+
+/** Persist the assets folder (`masir start --assets`). */
+export const saveAssetsPath = (path: string): Settings => writeSetting("xrayAssetsPath", path);

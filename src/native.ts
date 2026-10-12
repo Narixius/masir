@@ -28,6 +28,7 @@ declare function masirPromptLiveSelectPoll(): number;
 declare function masirPromptLiveSelectViewport(out: Buffer): number;
 declare function masirTextVisual(text: string, out: Buffer): number;
 declare function masirListProcesses(out: Buffer): number;
+declare function masirTerminalColumns(): number;
 
 export const nativeTransport: NativeTransport = {
   call: (request: string, response: Buffer): number => masirCall(request, response),
@@ -56,6 +57,8 @@ export const nativeText = {
 };
 
 export const nativeSystem = {
+  /** Terminal width in columns, or 0 when stdout isn't a terminal. */
+  terminalColumns: (): number => masirTerminalColumns(),
   /** Running processes as JSON (`[{pid, ppid, name, exe}]`); bytes written, -3 if `out` is too small. */
   listProcesses: (out: Buffer): number => masirListProcesses(out),
 };

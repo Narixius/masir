@@ -639,3 +639,15 @@ pub extern "C" fn masir_prompt_text(
     }))
     .unwrap_or(-2)
 }
+
+/// Width of the terminal on stdout in columns, or 0 when it isn't a terminal.
+#[unsafe(no_mangle)]
+pub extern "C" fn masir_terminal_columns() -> i32 {
+    catch_unwind(AssertUnwindSafe(|| {
+        if !io::stdout().is_terminal() {
+            return 0;
+        }
+        terminal::size().map(|(cols, _)| i32::from(cols)).unwrap_or(0)
+    }))
+    .unwrap_or(0)
+}

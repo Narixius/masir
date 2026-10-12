@@ -190,6 +190,7 @@ executeDevGrpcCall(addr, method, reqJson)
   target.masirPromptLiveSelectViewport = (_out: Buffer): number => -2;
   // Dev: no reordering (returns an error, so callers keep the original text).
   target.masirTextVisual = (_text: string, _out: Buffer): number => -2;
+  target.masirTerminalColumns = (): number => process.stdout.columns ?? 0;
   // Dev: process list from ps(1) (the native build uses sysinfo).
   target.masirListProcesses = (out: Buffer): number => {
     const result = spawnSync("ps", ["-axo", "pid=,ppid=,comm="], { encoding: "utf-8" });

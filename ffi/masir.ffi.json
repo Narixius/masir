@@ -134,6 +134,12 @@
       "symbol": "masir_prompt_live_select_selection",
       "params": ["mutable-bytes"],
       "returns": "i32"
+    },
+    {
+      "name": "masirTerminalColumns",
+      "symbol": "masir_terminal_columns",
+      "params": [],
+      "returns": "i32"
     }
   ],
   "libraries": ["../native/lib/libmasir_ffi.a"],

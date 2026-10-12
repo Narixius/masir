@@ -1,4 +1,4 @@
-import { loadSettings, saveSettings } from "../config/settings.js";
+import { loadSettings, saveAssetsPath } from "../config/settings.js";
 import type { ReconcileResult } from "../protocol.js";
 import { configManager, toXrayOutbound } from "./config-manager.js";
 import { routingForRules } from "./rules/pins.js";
@@ -17,7 +17,7 @@ export const runXray = async (options?: RunXrayOptions): Promise<ReconcileResult
   if (!activeNode) {
     throw new Error("No active proxy. Run `masir sub use` first.");
   }
-  const settings = options?.assetsPath ? saveSettings({ xrayAssetsPath: options.assetsPath }) : loadSettings();
+  const settings = options?.assetsPath ? saveAssetsPath(options.assetsPath) : loadSettings();
   const tun = Boolean(options?.tun);
   const routing = routingForRules(loadRules(), activeNode.outbound.id);
   const desiredConfig = configManager.buildDesiredConfig({
