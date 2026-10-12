@@ -27,5 +27,5 @@ fi
 
 mkdir -p dist
 echo "==> scriptc build src/main.ts ($MANIFEST)"
-scriptc build src/main.ts --ffi "$MANIFEST" --dynamic --strip --no-keep-llvm -o dist/masir
+run_scriptc build src/main.ts --ffi "$MANIFEST" --dynamic --strip --no-keep-llvm -o dist/masir
 echo "==> dist/masir"
