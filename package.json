@@ -1,6 +1,6 @@
 {
   "name": "masir-ts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "TypeScript IPC client + daemon for masir, compiled to a native binary with scriptc. The transport is a Rust staticlib linked through scriptc's --ffi manifest.",
   "type": "module",
