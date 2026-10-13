@@ -7,6 +7,7 @@ import { createFsDrain } from "evlog/fs";
 
 import "./native.js";
 import { daemonCommand } from "./commands/daemon/daemon.js";
+import { getConfigCommand } from "./commands/get-config.js";
 import { logsCommand } from "./commands/logs.js";
 import { modeCommand } from "./commands/mode.js";
 import { rulesCommand } from "./commands/rules/rules.js";
@@ -37,11 +38,12 @@ const masirCli = defineCommand({
     use: subUseCommand,
     mode: modeCommand,
     sub: subCommand,
-    logs: logsCommand,
     rules: rulesCommand,
     settings: settingsCommand,
-    daemon: daemonCommand,
+    logs: logsCommand,
     update: updateCommand,
+    daemon: daemonCommand,
+    "get-config": getConfigCommand,
   },
 });
 await tab(masirCli);

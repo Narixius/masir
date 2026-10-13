@@ -21,7 +21,8 @@ const sanitizeName = (name: string): string =>
   name
     .trim()
     .toLowerCase()
-    .replaceAll(/[^a-z0-9_-]+/gu, "-");
+    .replaceAll(/[^a-z0-9_.-]+/gu, "-")
+    .replace(/^\.+|\.+$/u, "");
 
 export const getSubFilePath = (name: string): string => join(getSubsDir(), `${sanitizeName(name)}.json`);
 
@@ -118,6 +119,23 @@ export const removeSubscription = (name: string): boolean =>
     });
     return true;
   });
+
+export const pruneOutbound = (subName: string, outboundId: string): boolean => {
+  const sub = getSubscription(subName);
+  if (!sub) {
+    return false;
+  }
+  const filtered = sub.outbounds.filter((ob) => ob.id !== outboundId);
+  if (filtered.length === sub.outbounds.length) {
+    return false;
+  }
+  const nextMeta: SubscriptionMeta = {
+    ...sub.meta,
+    nodeCount: filtered.length,
+  };
+  saveSubscription(nextMeta, filtered);
+  return true;
+};
 
 /** Make node `id` active; `subName` disambiguates when several subscriptions carry the same node. */
 export const setActiveNode = (id: string, subName?: string): boolean =>

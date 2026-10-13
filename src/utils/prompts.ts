@@ -138,6 +138,7 @@ export interface LiveSelectPromptOptions<T extends string> {
   readonly message: string;
   readonly rows: readonly LiveRow<T>[];
   readonly defaultValue?: T;
+  readonly allowCancel?: boolean;
   /**
    * Called every tick with the rows currently on screen; returns statuses to
    * show. Must not block for long. Exactly `LiveStatus[]` (no optional
@@ -197,17 +198,14 @@ const readSelection = (): LiveSelection => {
   return len > 0 ? (JSON.parse(out.subarray(0, len).toString("utf-8")) as LiveSelection) : { checked: [], custom: [] };
 };
 
-/**
- * Run the native live prompt to completion, feeding `refresh` statuses for
- * the rows on screen. `null` when it can't run interactively (no terminal).
- */
 const runLivePrompt = async (
   message: string,
   specs: readonly LiveSpec[],
   defaultIdx: number,
   flags: number,
-  refresh: (visibleRows: readonly number[]) => readonly LiveStatus[]
-): Promise<LiveOutcome | null> => {
+  refresh: (visibleRows: readonly number[]) => readonly LiveStatus[],
+  allowCancel = false
+): Promise<LiveOutcome | "cancelled" | null> => {
   const started = nativePrompts.liveSelectStart(message, JSON.stringify(specs), defaultIdx, flags);
   if (started !== 0) {
     return null;
@@ -238,6 +236,9 @@ const runLivePrompt = async (
       continue;
     }
     if (code === LIVE_CANCELLED) {
+      if (allowCancel) {
+        return "cancelled";
+      }
       process.exit(130);
     }
     if (code < 0 && code !== LIVE_CUSTOM_PICKED) {
@@ -269,9 +270,19 @@ const firstSelectable = <T extends string>(rows: readonly LiveRow<T>[], preferre
  * feeds it statuses for the rows on screen and polls for the answer, so the
  * event loop (and any in-process tests) keeps running.
  */
-export const liveSelectPrompt = async <T extends string>(options: LiveSelectPromptOptions<T>): Promise<T> => {
+export const liveSelectPrompt = async <T extends string>(options: LiveSelectPromptOptions<T>): Promise<T | undefined> => {
   const fallback = firstSelectable(options.rows, options.defaultValue);
-  const outcome = await runLivePrompt(options.message, options.rows.map(toSpec), options.rows.indexOf(fallback), 0, options.refresh);
+  const outcome = await runLivePrompt(
+    options.message,
+    options.rows.map(toSpec),
+    options.rows.indexOf(fallback),
+    0,
+    options.refresh,
+    options.allowCancel ?? false
+  );
+  if (outcome === "cancelled") {
+    return undefined;
+  }
   if (!outcome) {
     return fallback.value;
   }
@@ -398,7 +409,7 @@ export const pickValues = async <T extends string>(options: PickValuesOptions<T>
     const { specs, offset } = pickSpecs(options.rows, checked, custom);
     // oxlint-disable-next-line eslint/no-await-in-loop
     const outcome = await runLivePrompt(options.message, specs, -1, flags, noStatuses);
-    if (!outcome) {
+    if (!outcome || outcome === "cancelled") {
       return picked(options.rows, checked, custom);
     }
     const answer = splitSelection(outcome.selection, specs, offset);

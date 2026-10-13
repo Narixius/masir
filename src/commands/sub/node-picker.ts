@@ -88,17 +88,29 @@ const buildPicker = (all: readonly NodeRef[], active: NodeRef | null): Picker =>
 };
 
 /** Let the user pick one node; the active one is marked and preselected. */
-export const pickNode = async (all: readonly NodeRef[], message: string): Promise<NodeRef | undefined> => {
+export const pickNode = async (
+  all: readonly NodeRef[],
+  message: string,
+  options?: { readonly allowCancel?: boolean }
+): Promise<NodeRef | undefined> => {
   const picker = buildPicker(all, getActiveNode());
   const latency = createLatencyClient();
   try {
-    const value = await liveSelectPrompt({
-      defaultValue: picker.defaultValue,
-      message,
-      refresh: latencyRefresher(latency, picker.rowIds),
-      rows: picker.rows,
-    });
-    return picker.nodes.get(value);
+    const value = options?.allowCancel
+      ? await liveSelectPrompt({
+          allowCancel: true,
+          defaultValue: picker.defaultValue,
+          message,
+          refresh: latencyRefresher(latency, picker.rowIds),
+          rows: picker.rows,
+        })
+      : await liveSelectPrompt({
+          defaultValue: picker.defaultValue,
+          message,
+          refresh: latencyRefresher(latency, picker.rowIds),
+          rows: picker.rows,
+        });
+    return value === undefined ? undefined : picker.nodes.get(value);
   } finally {
     await latency.close();
   }

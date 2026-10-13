@@ -73,7 +73,7 @@ export const buildTunInbound = (settings: Settings): XrayInbound =>
     settings: {
       autoOutboundsInterface: "auto",
       autoSystemRoutingTable: ["0.0.0.0/0", "::/0"],
-      dns: settings.dnsServers,
+      dns: settings.tunDns,
       gateway: [settings.gateway],
       mtu: 1500,
       name: tunInterfaceName(),
@@ -200,17 +200,39 @@ const extractServerDestinations = (outbounds: readonly XrayOutbound[]): ServerDe
   return { domains: [...domains], ips: [...ips] };
 };
 
+interface DohEndpoint {
+  readonly host: string;
+  readonly isIp: boolean;
+  readonly port: number;
+}
+
+const parseDohEndpoint = (dohUrl: string): DohEndpoint => {
+  try {
+    const url = new URL(dohUrl);
+    const host = url.hostname;
+    const isIp = IPV4_REGEX.test(host) || host.includes(":");
+    const port = url.port ? Number(url.port) : 443;
+    return { host, isIp, port };
+  } catch {
+    return { host: "1.1.1.1", isIp: true, port: 443 };
+  }
+};
+
 export const buildDnsSettings = (options: DesiredConfigOptions): NonNullable<XrayConfig["dns"]> => {
   const outbounds: XrayOutbound[] = [options.activeOutbound];
   for (const outbound of options.extraOutbounds ?? []) {
     outbounds.push(outbound);
   }
   const { domains } = extractServerDestinations(outbounds);
+  const doh = parseDohEndpoint(options.settings.dohDns);
+  if (!doh.isIp && !domains.includes(doh.host)) {
+    domains.push(doh.host);
+  }
 
   const dns: NonNullable<XrayConfig["dns"]> = {
     servers: [
       {
-        address: "https://1.1.1.1/dns-query",
+        address: options.settings.dohDns,
         queryStrategy: "UseIPv4",
       },
     ],
@@ -220,8 +242,8 @@ export const buildDnsSettings = (options: DesiredConfigOptions): NonNullable<Xra
     dns.servers?.push({
       address: "1.1.1.1",
       domains,
-      tag: "dns-bootstrap",
       finalQuery: true,
+      tag: "dns-bootstrap",
     });
   }
 
@@ -234,6 +256,7 @@ export const buildDnsSettings = (options: DesiredConfigOptions): NonNullable<Xra
  */
 export const buildRoutingRules = (options: DesiredConfigOptions): XrayRoutingRule[] => {
   const rules: XrayRoutingRule[] = [];
+  const doh = parseDohEndpoint(options.settings.dohDns);
 
   rules.push(
     // prevent loop in tun mode
@@ -255,13 +278,21 @@ export const buildRoutingRules = (options: DesiredConfigOptions): XrayRoutingRul
       outboundTag: "dns-out",
     },
     // doh server always through proxy
-    {
-      ruleTag: "dns-upstream",
-      ip: ["1.1.1.1"],
-      port: 443,
-      network: "tcp",
-      outboundTag: "proxy",
-    }
+    doh.isIp
+      ? {
+          ip: [doh.host],
+          network: "tcp",
+          outboundTag: "proxy",
+          port: doh.port,
+          ruleTag: "dns-upstream",
+        }
+      : {
+          domain: [doh.host],
+          network: "tcp",
+          outboundTag: "proxy",
+          port: doh.port,
+          ruleTag: "dns-upstream",
+        }
   );
 
   // After the plumbing above (anti-loop, DNS), before the LAN bypass: a user
@@ -386,7 +417,7 @@ export const reconcile = async (desiredConfig: XrayConfig, options: ReconcileOpt
         proxySettings: {
           type: "xray.proxy.tun.Config",
           value: {
-            DNS: options.settings.dnsServers,
+            DNS: options.settings.tunDns,
             MTU: 1500,
             autoOutboundsInterface: "auto",
             autoSystemRoutingTable: ["0.0.0.0/0", "::/0"],

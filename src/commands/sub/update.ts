@@ -2,13 +2,15 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 
 import type { ResponseOf } from "../../protocol.js";
-import { listSubscriptions } from "../../services/subscription/storage.js";
+import { getAllOutbounds, listSubscriptions, pruneOutbound, setActiveNode } from "../../services/subscription/storage.js";
 import type { SubscriptionUpdateOutcome } from "../../services/subscription/types.js";
 import { updateSubscriptions } from "../../services/subscription/updater.js";
 import { setExitCode } from "../../utils/exit-code.js";
 import { tryCallHelper } from "../../utils/ipc.js";
 import { log } from "../../utils/log.js";
 import { createSpinner } from "../../utils/spinner.js";
+import { displayLabel } from "../../utils/terminal-text.js";
+import { pickNode } from "./node-picker.js";
 
 const reportOutcome = (outcome: SubscriptionUpdateOutcome): void => {
   if (!outcome.ok) {
@@ -17,10 +19,48 @@ const reportOutcome = (outcome: SubscriptionUpdateOutcome): void => {
   }
   log.step(pc.green(`Updated "${outcome.name}" (${outcome.nodeCount} configs).`));
   if (outcome.activeNodeStatus === "removed") {
-    log.warn(pc.yellow(`Warning: active config was removed from "${outcome.name}" by the provider.`));
+    if (!process.stdin.isTTY) {
+      log.warn(pc.yellow(`Warning: active config was removed from "${outcome.name}" by the provider. Kept active proxy in place.`));
+    }
   } else if (outcome.activeNodeStatus === "changed") {
     log.step(pc.cyan(`Active config in "${outcome.name}" changed; running Xray reloads with it.`));
   }
+};
+
+const handleRemovedActiveNode = async (outcome: Extract<SubscriptionUpdateOutcome, { ok: true }>): Promise<void> => {
+  const removedNode = outcome.removedActiveNode;
+  if (!removedNode || !process.stdin.isTTY) {
+    return;
+  }
+
+  log.warn(
+    pc.yellow(`The current active proxy (${displayLabel(removedNode)}) was removed from subscription "${outcome.name}". Pick a new one:`)
+  );
+
+  const all = getAllOutbounds();
+  if (all.length === 0) {
+    return;
+  }
+
+  const chosen = await pickNode(all, "Choose active outbound configuration", { allowCancel: true });
+  if (!chosen || chosen.outbound.id === removedNode.id) {
+    log.info(pc.dim(`Keeping old active proxy ("${displayLabel(removedNode)}").`));
+    return;
+  }
+
+  const targetId = chosen.outbound.id;
+  const res = tryCallHelper<ResponseOf<"sub:use">>({ id: targetId, subName: chosen.subName, type: "sub:use" });
+  if (res && !res.ok) {
+    log.error(pc.red(`Failed to switch outbound: ${res.error}`));
+    setExitCode(1);
+    return;
+  }
+  if (!res) {
+    setActiveNode(targetId, chosen.subName);
+  }
+
+  log.success(pc.green(`Active outbound switched to "${displayLabel(chosen.outbound)}" [${targetId}].`));
+  pruneOutbound(outcome.name, removedNode.id);
 };
 
 /**
@@ -75,6 +115,17 @@ export const subUpdateCommand = defineCommand({
     log.success(pc.green(`Finished updating ${successCount} of ${targets.length} subscription(s).`));
     if (successCount < targets.length) {
       setExitCode(1);
+    }
+
+    let removedOutcome: Extract<SubscriptionUpdateOutcome, { ok: true }> | undefined;
+    for (const o of outcomes) {
+      if (o.ok && o.activeNodeStatus === "removed" && o.removedActiveNode !== undefined) {
+        removedOutcome = o;
+        break;
+      }
+    }
+    if (removedOutcome) {
+      await handleRemovedActiveNode(removedOutcome);
     }
   },
 });

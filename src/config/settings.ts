@@ -118,10 +118,12 @@ export type RoutingMode = z.infer<typeof routingModeSchema>;
 const defaults = {
   apiPort: () => 10_085,
   dnsServers: () => ["1.1.1.1", "8.8.8.8"],
+  dohDns: () => "https://1.1.1.1/dns-query",
   gateway: () => "10.10.20.1/24",
-  mixedPort: () => 8083,
+  mixedPort: () => 7890,
   routingMode: (): RoutingMode => "proxy",
   subUpdateIntervalMinutes: () => 60,
+  tunDns: () => ["1.1.1.1", "8.8.8.8"],
   xrayAssetsPath: () => resolveAssetsPath(process.env["XRAY_LOCATION_ASSET"]),
   xrayExecutable: () => resolveXrayExecutable(),
 };
@@ -138,13 +140,17 @@ const withDefault = <T extends z.ZodMiniType>(key: string, schema: T, fallback: 
 const port = z.int().check(z.gte(1), z.lte(65_535));
 const nonEmpty = z.string().check(z.minLength(1));
 const positiveInt = z.int().check(z.gte(1));
+const ipv4List = z.array(z.ipv4()).check(z.minLength(1));
+
 const SettingsSchema = z.object({
   apiPort: withDefault("apiPort", port, defaults.apiPort),
-  dnsServers: withDefault("dnsServers", z.array(z.ipv4()).check(z.minLength(1)), defaults.dnsServers),
+  dnsServers: withDefault("dnsServers", ipv4List, defaults.dnsServers),
+  dohDns: withDefault("dohDns", nonEmpty, defaults.dohDns),
   gateway: withDefault("gateway", z.cidrv4(), defaults.gateway),
   mixedPort: withDefault("mixedPort", port, defaults.mixedPort),
   routingMode: withDefault("routingMode", routingModeSchema, defaults.routingMode),
   subUpdateIntervalMinutes: withDefault("subUpdateIntervalMinutes", positiveInt, defaults.subUpdateIntervalMinutes),
+  tunDns: withDefault("tunDns", ipv4List, defaults.tunDns),
   xrayAssetsPath: withDefault("xrayAssetsPath", nonEmpty, defaults.xrayAssetsPath),
   xrayExecutable: withDefault("xrayExecutable", nonEmpty, defaults.xrayExecutable),
 });
@@ -168,9 +174,16 @@ export const readRawSettings = (): Record<string, unknown> => {
 };
 
 export const loadSettings = (): Settings => {
-  const parsed = z.parse(SettingsSchema, readRawSettings());
+  const raw = readRawSettings();
+  if (raw["tunDns"] === undefined && raw["dnsServers"] !== undefined) {
+    raw["tunDns"] = raw["dnsServers"];
+  }
+  const parsed = z.parse(SettingsSchema, raw);
+  const effectiveTunDns = parsed.tunDns;
   return {
     ...parsed,
+    dnsServers: effectiveTunDns,
+    tunDns: effectiveTunDns,
     xrayExecutable: resolveXrayExecutable(parsed.xrayExecutable),
   };
 };

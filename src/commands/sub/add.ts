@@ -20,29 +20,7 @@ import { confirmPrompt, liveSelectPrompt, textPrompt } from "../../utils/prompts
 import { createSpinner } from "../../utils/spinner.js";
 import { displayLabel } from "../../utils/terminal-text.js";
 
-/** Host labels that say nothing about the provider. */
-const GENERIC_HOST_LABELS: ReadonlySet<string> = new Set([
-  "api",
-  "app",
-  "cdn",
-  "dash",
-  "dashboard",
-  "get",
-  "link",
-  "links",
-  "my",
-  "panel",
-  "portal",
-  "s",
-  "sub",
-  "subs",
-  "subscription",
-  "www",
-]);
-
-const IP_HOST = /^[\d.]+$/u;
-
-/** A free name from the URL's host: `https://sub.example.net/abc` -> `example`. */
+/** A free name from the URL's full domain: `https://sub.example.net/abc` -> `sub.example.net`. */
 const suggestSubscriptionName = (url: string): string => {
   let host = "";
   try {
@@ -50,14 +28,8 @@ const suggestSubscriptionName = (url: string): string => {
   } catch {
     // not a URL: fall back below
   }
-  const labels = host.split(".").filter((label) => label.length > 0);
-  // Skip generic labels and the TLD; an IP address keeps its full form.
-  const meaningful = labels.slice(0, -1).find((label) => !GENERIC_HOST_LABELS.has(label));
-  let raw = meaningful ?? labels[0] ?? "subscription";
-  if (IP_HOST.test(host)) {
-    raw = host;
-  }
-  const base = raw.replaceAll(/[^a-z0-9_-]+/gu, "-");
+  const raw = host.trim() || "subscription";
+  const base = raw.replaceAll(/[^a-z0-9_.-]+/gu, "-").replace(/^\.+|\.+$/u, "") || "subscription";
   let name = base;
   for (let n = 2; getSubscription(name) !== null || findNameConflict(name) !== undefined; n += 1) {
     name = `${base}-${n}`;
@@ -146,7 +118,7 @@ export const subAddCommand = defineCommand({
         const rows = outbounds.map((ob) => ({ header: false, label: `${displayLabel(ob)} ${pc.dim(ob.protocol)}`, value: ob.id }));
 
         const latency = createLatencyClient();
-        let selectedId: string;
+        let selectedId: string | undefined;
         try {
           selectedId = await liveSelectPrompt({
             message: "Select active outbound config",
@@ -158,6 +130,10 @@ export const subAddCommand = defineCommand({
           });
         } finally {
           await latency.close();
+        }
+
+        if (!selectedId) {
+          return;
         }
 
         // A running daemon owns the state: it records the choice and reloads xray.

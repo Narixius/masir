@@ -187,7 +187,6 @@ const settingsResetCommand = defineCommand({
 
 export const settingsCommand = defineCommand({
   meta: {
-    alias: ["config"],
     description: "View and change settings (ports, xray paths, DNS, refresh interval)",
     name: "settings",
   },

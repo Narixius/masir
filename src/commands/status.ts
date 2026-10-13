@@ -111,6 +111,8 @@ interface StatusJson {
   };
   readonly settings: {
     readonly routingMode: "proxy" | "direct";
+    readonly dohDns: string;
+    readonly tunDns: readonly string[];
     readonly mixedPort: number;
     readonly apiPort: number;
     readonly dnsServers: readonly string[];
@@ -234,7 +236,8 @@ const formatXrayRunning = (xray: ResolvedXray, settings: Settings): string => {
     formatRoutingMode(settings),
     `${pc.bold("Proxy Port:")} ${pc.bold(String(settings.mixedPort))} ${pc.dim("(Socks5/HTTP)")}`,
     `${pc.bold("API Port:")} ${pc.bold(String(xray.apiPort ?? settings.apiPort))} ${pc.dim("(xray-core gRPC)")}`,
-    `${pc.bold("DNS:")} ${pc.bold(settings.dnsServers.join(", "))}`,
+    `${pc.bold("DoH DNS:")} ${pc.bold(settings.dohDns)}`,
+    `${pc.bold("TUN DNS:")} ${pc.bold(settings.tunDns.join(", "))}`,
   ];
 
   if (xray.startedAt && xray.uptimeMs !== undefined) {
@@ -274,7 +277,7 @@ const formatXrayInactive = (xray: ResolvedXray, settings: Settings, daemonRunnin
     const items = [
       formatRoutingMode(settings),
       `${pc.bold("Ports:")} Mixed ${pc.bold(String(settings.mixedPort))}, API ${pc.bold(String(settings.apiPort))}`,
-      `${pc.bold("DNS:")} ${pc.bold(settings.dnsServers.join(", "))}`,
+      `${pc.bold("DNS:")} DoH ${pc.bold(settings.dohDns)}, TUN ${pc.bold(settings.tunDns.join(", "))}`,
     ];
     if (versionHint) {
       items.push(versionHint);
@@ -304,9 +307,11 @@ const buildStatusJson = (version: string, daemon: ResolvedDaemon, xray: Resolved
   },
   settings: {
     apiPort: settings.apiPort,
-    dnsServers: settings.dnsServers,
+    dnsServers: settings.tunDns,
+    dohDns: settings.dohDns,
     mixedPort: settings.mixedPort,
     routingMode: settings.routingMode,
+    tunDns: settings.tunDns,
   },
   xray: xray.running
     ? {

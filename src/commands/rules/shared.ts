@@ -146,7 +146,7 @@ const pickApp = async (apps: readonly AppEntry[]): Promise<AppEntry | undefined>
     }
   }
   const chosen = await liveSelectPrompt({ message: "Pick an app", refresh: () => [], rows });
-  return byValue.get(chosen);
+  return chosen === undefined ? undefined : byValue.get(chosen);
 };
 
 /**
@@ -330,7 +330,7 @@ export const resolveTarget = async (givenOutbound: string, givenVia: string): Pr
     message: "Where should matching traffic go?",
     options: [
       { hint: OUTBOUND_HINTS.proxy, label: "proxy", value: "proxy" },
-      { hint: "pin to one proxy; falls back to the active one if it is removed", label: "a specific proxy…", value: PIN_CHOICE },
+      { hint: "pin to one proxy", label: "a specific proxy…", value: PIN_CHOICE },
       { hint: OUTBOUND_HINTS.direct, label: "direct", value: "direct" },
       { hint: OUTBOUND_HINTS.block, label: "block", value: "block" },
     ],

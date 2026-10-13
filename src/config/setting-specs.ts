@@ -10,11 +10,12 @@ import type { Settings, SettingValue } from "./settings.js";
 
 export type SettingKey =
   | "routingMode"
+  | "dohDns"
+  | "tunDns"
   | "mixedPort"
   | "apiPort"
   | "xrayExecutable"
   | "xrayAssetsPath"
-  | "dnsServers"
   | "gateway"
   | "subUpdateIntervalMinutes";
 
@@ -75,6 +76,18 @@ const parseAssetsPath = (text: string): ParsedSetting => {
   return missing.length === 0 ? { ok: true, value } : fail(`${value} has no ${missing.join(" or ")}`);
 };
 
+const parseDohDns = (text: string): ParsedSetting => {
+  try {
+    const parsed = new URL(text);
+    if (parsed.protocol !== "https:") {
+      return fail("must be an HTTPS URL, e.g. https://1.1.1.1/dns-query");
+    }
+    return { ok: true, value: text };
+  } catch {
+    return fail("must be a valid URL, e.g. https://1.1.1.1/dns-query");
+  }
+};
+
 const parseDnsServers = (text: string): ParsedSetting => {
   const servers = text.split(LIST_SEPARATOR).filter((part) => part.length > 0);
   const invalid = servers.filter((server) => !z.safeParse(z.ipv4(), server).success);
@@ -98,6 +111,20 @@ export const SETTINGS: readonly SettingSpec[] = [
     key: "routingMode",
     label: "Routing mode",
     parse: parseRoutingMode,
+    reloadsXray: true,
+  },
+  {
+    description: "DNS-over-HTTPS server URL (default: https://1.1.1.1/dns-query)",
+    key: "dohDns",
+    label: "DoH DNS",
+    parse: parseDohDns,
+    reloadsXray: true,
+  },
+  {
+    description: "DNS servers in TUN mode (IPv4, comma-separated)",
+    key: "tunDns",
+    label: "TUN DNS",
+    parse: parseDnsServers,
     reloadsXray: true,
   },
   {
@@ -129,13 +156,6 @@ export const SETTINGS: readonly SettingSpec[] = [
     reloadsXray: true,
   },
   {
-    description: "DNS servers in TUN mode (IPv4, comma-separated)",
-    key: "dnsServers",
-    label: "DNS servers",
-    parse: parseDnsServers,
-    reloadsXray: true,
-  },
-  {
     description: "TUN interface address (IPv4 CIDR)",
     key: "gateway",
     label: "TUN gateway",
@@ -154,9 +174,12 @@ export const SETTINGS: readonly SettingSpec[] = [
   },
 ];
 
-/** The spec for `key`, accepting either spelling (`mixedPort`, `mixed-port`). */
+/** The spec for `key`, accepting either spelling (`mixedPort`, `mixed-port`, `dnsServers` -> `tunDns`). */
 export const findSetting = (key: string): SettingSpec | undefined => {
   const wanted = key.replaceAll("-", "").toLowerCase();
+  if (wanted === "dnsservers") {
+    return SETTINGS.find((spec) => spec.key === "tunDns");
+  }
   return SETTINGS.find((spec) => spec.key.toLowerCase() === wanted);
 };
 
@@ -165,6 +188,12 @@ export const formatSetting = (spec: SettingSpec, settings: Settings): string => 
   switch (spec.key) {
     case "routingMode": {
       return settings.routingMode;
+    }
+    case "dohDns": {
+      return settings.dohDns;
+    }
+    case "tunDns": {
+      return settings.tunDns.join(", ");
     }
     case "mixedPort": {
       return String(settings.mixedPort);
@@ -177,9 +206,6 @@ export const formatSetting = (spec: SettingSpec, settings: Settings): string => 
     }
     case "xrayAssetsPath": {
       return settings.xrayAssetsPath;
-    }
-    case "dnsServers": {
-      return settings.dnsServers.join(", ");
     }
     case "gateway": {
       return settings.gateway;

@@ -51,5 +51,6 @@ export type SubscriptionUpdateOutcome =
       readonly ok: true;
       readonly nodeCount: number;
       readonly activeNodeStatus: ActiveNodeStatus;
+      readonly removedActiveNode?: ManagedOutbound;
     }
   | { readonly name: string; readonly ok: false; readonly error: string };
