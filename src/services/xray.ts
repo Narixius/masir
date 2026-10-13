@@ -67,6 +67,7 @@ export class Xray {
   private startedAt: number | null = null;
   private mode: XrayMode = "proxy";
   private lastError: string | null = null;
+  private runWithConfigChain: Promise<unknown> = Promise.resolve();
 
   getApiPort = (): number => this.apiPort ?? loadSettings().apiPort;
 
@@ -85,6 +86,15 @@ export class Xray {
   };
 
   runWithConfig = async (config: XrayConfig): Promise<{ apiPort: number; pid: number }> => {
+    const run = () => this.executeRunWithConfig(config);
+    const task = this.runWithConfigChain.then(run, run);
+    this.runWithConfigChain = task.catch(() => {
+      // Swallow errors to keep the serialized queue running
+    });
+    return await task;
+  };
+
+  private executeRunWithConfig = async (config: XrayConfig): Promise<{ apiPort: number; pid: number }> => {
     const log = createLogger({ operation: "runWithConfig" });
     log.set({ currentState: this.state });
     if (this.process) {

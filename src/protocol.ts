@@ -32,6 +32,7 @@ export const RequestSchema = z.discriminatedUnion("type", [
   z.object({ name: z.optional(nonEmpty), type: z.literal("sub:update") }),
   z.object({ ids: z.array(nonEmpty), refresh: z.optional(z.boolean()), type: z.literal("latency:probe") }),
   z.object({ refresh: z.optional(z.boolean()), type: z.literal("net:diagnose") }),
+  z.object({ dest: nonEmpty, src: nonEmpty, type: z.literal("install:binary") }),
 ]);
 
 export type Request = z.infer<typeof RequestSchema>;
@@ -128,6 +129,7 @@ export interface ResponseMap {
   readonly "sub:update": readonly SubscriptionUpdateOutcome[];
   readonly "latency:probe": readonly LatencyEntry[];
   readonly "net:diagnose": NetDiagnosis;
+  readonly "install:binary": string;
 }
 
 export type ResponseOf<K extends RequestType> = ResponseMap[K];

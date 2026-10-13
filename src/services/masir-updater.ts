@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, constants, copyFileSync, existsSync, mkdirSync, rmSync, accessSync } from "node:fs";
-import { join } from "node:path";
+import { accessSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import pc from "picocolors";
@@ -161,11 +161,38 @@ const canWritePath = (filePath: string): boolean => {
   }
 };
 
-const copyOrSudoCopy = (src: string, dest: string): void => {
-  if (canWritePath(dest)) {
+const safeInstallBinary = (src: string, dest: string): void => {
+  const dir = dirname(dest);
+  const tmpDest = join(dir, `.masir-update-${Date.now()}`);
+  try {
+    copyFileSync(src, tmpDest);
+    chmodSync(tmpDest, 0o755);
+    renameSync(tmpDest, dest);
+  } catch {
     copyFileSync(src, dest);
     chmodSync(dest, 0o755);
+  } finally {
+    if (existsSync(tmpDest)) {
+      try {
+        rmSync(tmpDest, { force: true });
+      } catch {
+        // ignore
+      }
+    }
+  }
+};
+
+const copyOrSudoCopy = (src: string, dest: string): void => {
+  if (canWritePath(dest)) {
+    safeInstallBinary(src, dest);
     return;
+  }
+  const info = checkHandlerInfo();
+  if (info && info.helperEuid === 0) {
+    const res = tryCallHelper<ResponseOf<"install:binary">>({ dest, src, type: "install:binary" });
+    if (res?.ok) {
+      return;
+    }
   }
   const res = spawnSync("sudo", ["cp", src, dest], { stdio: "inherit" });
   if (res.status !== 0) {

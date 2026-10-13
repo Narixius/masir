@@ -12,4 +12,4 @@ minimumReleaseAgeExclude:
   - "@scriptc/cli-linux-x64-gnu@0.2.10"
   - "@scriptc/cli-linux-x64-musl@0.2.10"
   - "@scriptc/cli-win32-x64-msvc@0.2.10"
-  - '@gozargah/xray-schema@0.0.30'
+  - "@gozargah/xray-schema@0.0.30"

@@ -370,7 +370,9 @@ export interface ReconcileOptions {
   readonly reload?: boolean;
 }
 
-export const reconcile = async (desiredConfig: XrayConfig, options: ReconcileOptions): Promise<ReconcileResult> => {
+let reconcileChain: Promise<unknown> = Promise.resolve();
+
+const reconcileInternal = async (desiredConfig: XrayConfig, options: ReconcileOptions): Promise<ReconcileResult> => {
   const log = createLogger({ operation: "configManager.reconcile", tun: options.tun });
   const requestedMode: XrayMode = options.tun ? "tun" : "proxy";
 
@@ -486,6 +488,15 @@ export const reconcile = async (desiredConfig: XrayConfig, options: ReconcileOpt
       status: requestedMode === "tun" ? "tun-enabled" : "tun-disabled",
     };
   }
+};
+
+export const reconcile = async (desiredConfig: XrayConfig, options: ReconcileOptions): Promise<ReconcileResult> => {
+  const run = () => reconcileInternal(desiredConfig, options);
+  const task = reconcileChain.then(run, run);
+  reconcileChain = task.catch((_error) => {
+    // Swallow errors to keep the serialized queue running
+  });
+  return await task;
 };
 
 export const configManager = {

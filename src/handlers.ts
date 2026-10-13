@@ -1,6 +1,7 @@
 // The daemon side of the IPC protocol (see protocol.ts): decode, authorize,
 // dispatch to one handler per request type, encode. `respond` is total.
-import { statSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, renameSync, rmSync, statSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 
 import * as z from "zod/mini";
 
@@ -9,6 +10,7 @@ import { getXrayGrpcClient } from "./contexts/grpc.js";
 import { ipToProto, XrayType } from "./injectables/xray/types.js";
 import { RequestSchema } from "./protocol.js";
 import type { Request, ResponseOf, StatusResult } from "./protocol.js";
+import { getDaemonServiceBinPath } from "./services/daemon-service/daemon-service.js";
 import { diagnose, probeNodes } from "./services/latency/latency-service.js";
 import type { RunningXray } from "./services/latency/latency-service.js";
 import { runXray } from "./services/run-xray.js";
@@ -159,6 +161,46 @@ const shutdown = (): ResponseOf<"shutdown"> => {
   return "daemon shutting down";
 };
 
+const isAllowedBinaryDestination = (dest: string): boolean => {
+  if (!isAbsolute(dest) || basename(dest) !== "masir") {
+    return false;
+  }
+  const allowedDirs = ["/usr/local/bin", "/usr/bin", "/opt/homebrew/bin", "/Library/PrivilegedHelperTools", dirname(process.execPath)];
+  const serviceBin = getDaemonServiceBinPath();
+  if (serviceBin) {
+    allowedDirs.push(dirname(serviceBin));
+  }
+  const targetDir = dirname(dest);
+  return allowedDirs.includes(targetDir);
+};
+
+const installBinary = (src: string, dest: string): void => {
+  if (!isAbsolute(src) || !existsSync(src) || !statSync(src).isFile()) {
+    throw new Error(`Invalid source file: ${src}`);
+  }
+  if (!isAllowedBinaryDestination(dest)) {
+    throw new Error(`Destination path is not allowed: ${dest}`);
+  }
+  const dir = dirname(dest);
+  const tmpDest = join(dir, `.masir-update-${Date.now()}`);
+  try {
+    copyFileSync(src, tmpDest);
+    chmodSync(tmpDest, 0o755);
+    renameSync(tmpDest, dest);
+  } catch {
+    copyFileSync(src, dest);
+    chmodSync(dest, 0o755);
+  } finally {
+    if (existsSync(tmpDest)) {
+      try {
+        rmSync(tmpDest, { force: true });
+      } catch {
+        // ignore
+      }
+    }
+  }
+};
+
 /* -------------------------------------------------------------------------- */
 /* Boundary                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -226,6 +268,13 @@ const dispatch = async (request: Request, ctx: RequestContext): Promise<string> 
     }
     case "net:diagnose": {
       return okBody<ResponseOf<"net:diagnose">>(diagnose(runningXray(), Boolean(request.refresh)));
+    }
+    case "install:binary": {
+      if (ctx.helperEuid !== 0) {
+        throw new Error("daemon is not running as root");
+      }
+      installBinary(request.src, request.dest);
+      return okBody<ResponseOf<"install:binary">>(request.dest);
     }
     default: {
       const unhandled: never = request;
