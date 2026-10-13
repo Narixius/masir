@@ -73,6 +73,30 @@ jobs:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Locate pnpm store
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package.json', 'pnpm-workspace.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache Cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: cargo-${{ matrix.target }}-${{ hashFiles('native/Cargo.lock', 'native/Cargo.toml', 'native/**/Cargo.toml') }}
+          restore-keys: |
+            cargo-${{ matrix.target }}-
+
       - name: Build masir
         run: |
           # scriptc comes from node_modules (a devDependency). pnpm-lock.yaml is not committed, so resolve fresh.
