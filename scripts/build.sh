@@ -3,7 +3,6 @@
 # Run scripts/build-native.sh first (or use `npm run build` / `npm run dev`).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-source scripts/lib.sh
 
 if [[ ! -f native/lib/libmasir_transport.a ]]; then
   echo "native/lib/libmasir_transport.a is missing; run scripts/build-native.sh first" >&2
@@ -27,5 +26,5 @@ fi
 
 mkdir -p dist
 echo "==> scriptc build src/main.ts ($MANIFEST)"
-run_scriptc build src/main.ts --ffi "$MANIFEST" --dynamic --strip --no-keep-llvm -o dist/masir
+pnpm exec scriptc build src/main.ts --ffi "$MANIFEST" --dynamic --strip --no-keep-llvm -o dist/masir
 echo "==> dist/masir"

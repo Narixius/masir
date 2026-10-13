@@ -12,7 +12,7 @@ $ pnpm typecheck
 $ pnpm build          # the real binary → dist/masir
 ```
 
-`pnpm build` uses the scriptc fork at `~/Projects/scriptc` when it exists. Otherwise set `SCRIPTC_MAIN` to its `packages/cli/dist/main.js`, or `SCRIPTC` to a compiler binary.
+`pnpm build` uses the scriptc in `node_modules` (a devDependency, pinned in `package.json`).
 
 **Always run `pnpm build` after non-trivial changes.** `tsc` accepts code that scriptc can't compile; see [scriptc constraints](#scriptc-constraints).
 

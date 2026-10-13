@@ -7,13 +7,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  # masir compiles with this scriptc fork commit (it carries fixes citty needs).
-  SCRIPTC_REPO: Narixius/scriptc
-  SCRIPTC_REF: 114c544941310221b5051d907f9df384581c7a4b
-  LLVM_VERSION: 22.1.8
-  ZIG_VERSION: 0.16.0
-
 jobs:
   build:
     name: ${{ matrix.target }}
@@ -24,17 +17,10 @@ jobs:
         include:
           - { target: darwin-arm64, runner: macos-15 }
           - { target: darwin-x64, runner: macos-15-intel }
-          - { target: linux-x64-gnu, runner: ubuntu-24.04, llvm: Linux-X64 }
-          - { target: linux-arm64-gnu, runner: ubuntu-24.04-arm, llvm: Linux-ARM64 }
+          - { target: linux-x64-gnu, runner: ubuntu-24.04 }
+          - { target: linux-arm64-gnu, runner: ubuntu-24.04-arm }
     steps:
       - uses: actions/checkout@v4
-
-      - name: Check out scriptc
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.SCRIPTC_REPO }}
-          ref: ${{ env.SCRIPTC_REF }}
-          path: scriptc
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -42,61 +28,9 @@ jobs:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
 
-      # scriptc's native parts: an LLVM helper (needs LLVM 22) and a C runtime pack (Zig on Linux).
-      - name: Restore scriptc native build
-        id: scriptc-native
-        uses: actions/cache@v4
-        with:
-          path: |
-            scriptc/packages/llvm-${{ matrix.target }}/bin
-            scriptc/packages/runtime-${{ matrix.target }}/artifacts
-            scriptc/packages/runtime-${{ matrix.target }}/runtime-pack.json
-          key: scriptc-native-${{ env.SCRIPTC_REF }}-${{ matrix.target }}-v1
-
-      - name: Install LLVM (macOS)
-        if: runner.os == 'macOS' && steps.scriptc-native.outputs.cache-hit != 'true'
-        run: brew install llvm@22
-
-      - name: Install LLVM (Linux)
-        if: runner.os == 'Linux' && steps.scriptc-native.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes g++ zlib1g-dev libzstd-dev
-          name="LLVM-${LLVM_VERSION}-${{ matrix.llvm }}"
-          curl -fL --retry 2 -o "$RUNNER_TEMP/llvm.tar.xz" \
-            "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/${name}.tar.xz"
-          tar -xJf "$RUNNER_TEMP/llvm.tar.xz" -C "$RUNNER_TEMP"
-          echo "LLVM_DIR=$RUNNER_TEMP/${name}/lib/cmake/llvm" >> "$GITHUB_ENV"
-          echo "$RUNNER_TEMP/${name}/bin" >> "$GITHUB_PATH"
-
-      - name: Install Zig (Linux)
-        if: runner.os == 'Linux' && steps.scriptc-native.outputs.cache-hit != 'true'
-        uses: vercel-labs/setup-zig@v1
-        with:
-          version: ${{ env.ZIG_VERSION }}
-
-      - name: Build scriptc
-        working-directory: scriptc
-        env:
-          TARGET: ${{ matrix.target }}
-          NATIVE_CACHED: ${{ steps.scriptc-native.outputs.cache-hit }}
-        run: |
-          pnpm install --frozen-lockfile
-          if [ "$NATIVE_CACHED" != "true" ]; then
-            pnpm --filter "@scriptc/llvm-$TARGET" build:native
-            if [ "$RUNNER_OS" = "Linux" ]; then
-              CC=zig AR=zig pnpm --filter "@scriptc/runtime-$TARGET" build:native
-            else
-              pnpm --filter "@scriptc/runtime-$TARGET" build:native
-            fi
-          fi
-          pnpm build
-
       - name: Build masir
-        env:
-          SCRIPTC_MAIN: ${{ github.workspace }}/scriptc/packages/cli/dist/main.js
         run: |
-          # pnpm-lock.yaml is not committed, so resolve fresh.
+          # scriptc comes from node_modules (a devDependency). pnpm-lock.yaml is not committed, so resolve fresh.
           pnpm install --no-frozen-lockfile
           PROFILE=release scripts/build-native.sh
           scripts/build.sh
