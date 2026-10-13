@@ -42,9 +42,9 @@ const masirCli = defineCommand({
     rules: rulesCommand,
     settings: settingsCommand,
     logs: logsCommand,
+    "get-config": getConfigCommand,
     update: updateCommand,
     daemon: daemonCommand,
-    "get-config": getConfigCommand,
   },
 });
 await tab(masirCli);
