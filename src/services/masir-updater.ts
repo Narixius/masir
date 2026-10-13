@@ -1,12 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { accessSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { accessSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import pc from "picocolors";
 
 import { loadSettings } from "../config/settings.js";
-import type { ResponseOf } from "../protocol.js";
+import type { DaemonUpgradeResult, ResponseOf } from "../protocol.js";
 import { checkHandlerInfo, ensureHandlerIsReady } from "../utils/handler.js";
 import { callHelper, tryCallHelper } from "../utils/ipc.js";
 import { log } from "../utils/log.js";
@@ -17,12 +18,14 @@ import { getDaemonServiceBinPath, isDaemonServiceInstalled } from "./daemon-serv
 import { compareVersions } from "./xray-updater.js";
 
 const RELEASES_API_URL = "https://api.github.com/repos/Narixius/masir/releases?per_page=10";
+const GITHUB_RELEASE_DOWNLOAD_PREFIX = "https://github.com/Narixius/masir/releases/download/";
 const SHUTDOWN_WAIT_TIMEOUT_MS = 3000;
 const POLL_INTERVAL_MS = 100;
 
 interface GithubReleaseAsset {
   readonly name: string;
   readonly browser_download_url: string;
+  readonly digest?: string;
 }
 
 interface GithubRelease {
@@ -38,6 +41,7 @@ export interface LatestMasirRelease {
   readonly prerelease: boolean;
   readonly assetName: string;
   readonly downloadUrl: string;
+  readonly digest?: string;
 }
 
 export interface UpdateMasirOptions {
@@ -96,6 +100,7 @@ export const fetchLatestMasirRelease = (proxyUrl?: string): LatestMasirRelease =
   const downloadUrl = asset?.browser_download_url ?? `https://github.com/Narixius/masir/releases/download/${latest.tag_name}/${assetName}`;
   return {
     assetName,
+    digest: asset?.digest,
     downloadUrl,
     prerelease: latest.prerelease,
     tag: latest.tag_name,
@@ -119,7 +124,25 @@ const resolveProxyUrl = async (explicitProxy: boolean | undefined, xrayRunning: 
   return useProxy ? proxyUrl : undefined;
 };
 
-const downloadAndExtractMasir = (downloadUrl: string, tmpDir: string, proxyUrl?: string): string => {
+const verifyArchiveDigest = (archivePath: string, expectedDigest?: string): void => {
+  if (!expectedDigest) {
+    return;
+  }
+  const fileBuf = readFileSync(archivePath);
+  const hash = createHash("sha256").update(fileBuf).digest("hex");
+  const cleanExpected = expectedDigest
+    .replace(/^sha256:/iu, "")
+    .trim()
+    .toLowerCase();
+  if (hash.toLowerCase() !== cleanExpected) {
+    throw new Error(`Archive integrity check failed: expected SHA-256 ${cleanExpected}, got ${hash}`);
+  }
+};
+
+const downloadAndExtractMasir = (downloadUrl: string, tmpDir: string, proxyUrl?: string, expectedDigest?: string): string => {
+  if (!downloadUrl.startsWith(GITHUB_RELEASE_DOWNLOAD_PREFIX)) {
+    throw new Error(`Untrusted download URL: ${downloadUrl}`);
+  }
   mkdirSync(tmpDir, { recursive: true });
   const archivePath = join(tmpDir, "masir-download.tar.gz");
   try {
@@ -129,6 +152,7 @@ const downloadAndExtractMasir = (downloadUrl: string, tmpDir: string, proxyUrl?:
     if (dl.error || dl.status !== 0) {
       throw new Error(`curl download failed (exit code ${String(dl.status ?? "unknown")})`);
     }
+    verifyArchiveDigest(archivePath, expectedDigest);
     const extract = spawnSync("tar", ["-xzf", archivePath, "-C", tmpDir], { encoding: "utf-8" });
     if (extract.error || extract.status !== 0) {
       throw new Error(`Failed to extract archive: ${extract.stderr?.trim() || extract.error?.message || "tar failed"}`);
@@ -186,13 +210,6 @@ const copyOrSudoCopy = (src: string, dest: string): void => {
   if (canWritePath(dest)) {
     safeInstallBinary(src, dest);
     return;
-  }
-  const info = checkHandlerInfo();
-  if (info && info.helperEuid === 0) {
-    const res = tryCallHelper<ResponseOf<"install:binary">>({ dest, src, type: "install:binary" });
-    if (res?.ok) {
-      return;
-    }
   }
   const res = spawnSync("sudo", ["cp", src, dest], { stdio: "inherit" });
   if (res.status !== 0) {
@@ -263,12 +280,127 @@ const installUpdatedBinaries = (newExePath: string, primaryTarget: string): void
   }
 };
 
-const verifyExtractedBinary = (exePath: string): boolean => {
+const verifyExtractedBinary = (exePath: string, expectedVersion?: string): boolean => {
   const testRes = spawnSync(exePath, ["--version"], { encoding: "utf-8" });
   if (testRes.status !== 0) {
     log.error(pc.red(`Extracted masir binary verification failed: ${testRes.stderr?.trim() || "exit code nonzero"}`));
     return false;
   }
+  if (expectedVersion) {
+    const output = (testRes.stdout || "").trim();
+    if (!output.includes(expectedVersion)) {
+      log.error(pc.red(`Extracted binary version mismatch: expected ${expectedVersion}, got ${output}`));
+      return false;
+    }
+  }
+  return true;
+};
+
+export const performDaemonUpgrade = (options?: { readonly force?: boolean; readonly proxyUrl?: string }): DaemonUpgradeResult => {
+  ensureTarCapability();
+  const release = fetchLatestMasirRelease(options?.proxyUrl);
+  if (!options?.force && compareVersions(MASIR_VERSION, release.version) >= 0) {
+    return {
+      fromVersion: MASIR_VERSION,
+      targetPaths: [],
+      toVersion: release.version,
+      updated: false,
+    };
+  }
+
+  const tmpDir = join(loadSettings().xrayAssetsPath || "/tmp", `masir-daemon-upgrade-${Date.now()}`);
+  try {
+    const newExePath = downloadAndExtractMasir(release.downloadUrl, tmpDir, options?.proxyUrl, release.digest);
+    if (!verifyExtractedBinary(newExePath, release.version)) {
+      throw new Error("Extracted binary failed verification");
+    }
+
+    const targetPaths: string[] = [];
+    const primaryTarget = process.execPath;
+    safeInstallBinary(newExePath, primaryTarget);
+    targetPaths.push(primaryTarget);
+
+    if (isDaemonServiceInstalled()) {
+      const serviceBin = getDaemonServiceBinPath();
+      if (serviceBin && serviceBin !== primaryTarget && existsSync(serviceBin)) {
+        safeInstallBinary(newExePath, serviceBin);
+        targetPaths.push(serviceBin);
+      }
+    }
+
+    return {
+      fromVersion: MASIR_VERSION,
+      targetPaths,
+      toVersion: release.version,
+      updated: true,
+    };
+  } finally {
+    try {
+      rmSync(tmpDir, { force: true, recursive: true });
+    } catch {
+      // ignore
+    }
+  }
+};
+
+const downloadAndInstallRelease = (release: LatestMasirRelease, proxyUrl?: string): boolean => {
+  const fromLabel = MASIR_VERSION ? `v${MASIR_VERSION} → ` : "";
+  log.info(`Downloading masir ${pc.bold(`${fromLabel}${release.tag}`)} (${release.assetName})...`);
+
+  const tmpDir = join(loadSettings().xrayAssetsPath || "/tmp", `masir-update-${Date.now()}`);
+  let newExePath: string;
+  try {
+    newExePath = downloadAndExtractMasir(release.downloadUrl, tmpDir, proxyUrl, release.digest);
+  } catch (error) {
+    log.error(pc.red(error instanceof Error ? error.message : String(error)));
+    return false;
+  }
+
+  if (!verifyExtractedBinary(newExePath, release.version)) {
+    rmSync(tmpDir, { force: true, recursive: true });
+    return false;
+  }
+
+  try {
+    installUpdatedBinaries(newExePath, process.execPath);
+  } catch (error) {
+    log.error(pc.red(error instanceof Error ? error.message : String(error)));
+    rmSync(tmpDir, { force: true, recursive: true });
+    return false;
+  }
+
+  rmSync(tmpDir, { force: true, recursive: true });
+  log.success(`${pc.green("✔")} masir updated to ${pc.bold(`v${release.version}`)}`);
+  return true;
+};
+
+const executeDaemonUpgrade = async (params: {
+  readonly force?: boolean;
+  readonly proxyUrl?: string;
+  readonly isXrayRunning: boolean;
+  readonly wasTun: boolean;
+  readonly currentVersion: string;
+}): Promise<boolean> => {
+  log.step("Requesting root daemon to perform verified upgrade from GitHub...");
+  const upgradeRes = tryCallHelper<ResponseOf<"daemon:upgrade">>({
+    force: params.force,
+    proxyUrl: params.proxyUrl,
+    type: "daemon:upgrade",
+  });
+  if (upgradeRes === null) {
+    log.error(pc.red("Daemon verified upgrade failed: daemon unreachable"));
+    return false;
+  }
+  if (!upgradeRes.ok) {
+    log.error(pc.red(`Daemon verified upgrade failed: ${upgradeRes.error}`));
+    return false;
+  }
+  if (upgradeRes.result.updated) {
+    log.success(`${pc.green("✔")} masir updated to ${pc.bold(`v${upgradeRes.result.toVersion}`)}`);
+  } else {
+    log.success(`${pc.green("masir is already up to date")} ${pc.dim(`(v${params.currentVersion} • ${process.execPath})`)}`);
+  }
+  await restartDaemonAfterUpdate({ wasRunning: params.isXrayRunning, wasTun: params.wasTun });
   return true;
 };
 
@@ -296,33 +428,14 @@ export const updateMasir = async (options?: UpdateMasirOptions): Promise<boolean
     return true;
   }
 
-  const fromLabel = currentVersion ? `v${currentVersion} → ` : "";
-  log.info(`Downloading masir ${pc.bold(`${fromLabel}${release.tag}`)} (${release.assetName})...`);
-
-  const tmpDir = join(loadSettings().xrayAssetsPath || "/tmp", `masir-update-${Date.now()}`);
-  let newExePath: string;
-  try {
-    newExePath = downloadAndExtractMasir(release.downloadUrl, tmpDir, proxyUrl);
-  } catch (error) {
-    log.error(pc.red(error instanceof Error ? error.message : String(error)));
-    return false;
+  const info = checkHandlerInfo();
+  if (info && info.helperEuid === 0) {
+    return await executeDaemonUpgrade({ currentVersion, force: options?.force, isXrayRunning, proxyUrl, wasTun });
   }
 
-  if (!verifyExtractedBinary(newExePath)) {
-    rmSync(tmpDir, { force: true, recursive: true });
+  if (!downloadAndInstallRelease(release, proxyUrl)) {
     return false;
   }
-
-  try {
-    installUpdatedBinaries(newExePath, process.execPath);
-  } catch (error) {
-    log.error(pc.red(error instanceof Error ? error.message : String(error)));
-    rmSync(tmpDir, { force: true, recursive: true });
-    return false;
-  }
-
-  rmSync(tmpDir, { force: true, recursive: true });
-  log.success(`${pc.green("✔")} masir updated to ${pc.bold(`v${release.version}`)}`);
 
   if (checkHandlerInfo()) {
     await restartDaemonAfterUpdate({ wasRunning: isXrayRunning, wasTun });

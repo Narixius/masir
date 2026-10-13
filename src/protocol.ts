@@ -32,7 +32,11 @@ export const RequestSchema = z.discriminatedUnion("type", [
   z.object({ name: z.optional(nonEmpty), type: z.literal("sub:update") }),
   z.object({ ids: z.array(nonEmpty), refresh: z.optional(z.boolean()), type: z.literal("latency:probe") }),
   z.object({ refresh: z.optional(z.boolean()), type: z.literal("net:diagnose") }),
-  z.object({ dest: nonEmpty, src: nonEmpty, type: z.literal("install:binary") }),
+  z.object({
+    force: z.optional(z.boolean()),
+    proxyUrl: z.optional(nonEmpty),
+    type: z.literal("daemon:upgrade"),
+  }),
 ]);
 
 export type Request = z.infer<typeof RequestSchema>;
@@ -111,6 +115,13 @@ export interface NetDiagnosis {
 }
 
 /** The `result` type of a successful response, per request type. */
+export interface DaemonUpgradeResult {
+  readonly updated: boolean;
+  readonly fromVersion: string;
+  readonly toVersion: string;
+  readonly targetPaths: readonly string[];
+}
+
 export interface ResponseMap {
   readonly ping: string;
   readonly echo: string;
@@ -129,7 +140,7 @@ export interface ResponseMap {
   readonly "sub:update": readonly SubscriptionUpdateOutcome[];
   readonly "latency:probe": readonly LatencyEntry[];
   readonly "net:diagnose": NetDiagnosis;
-  readonly "install:binary": string;
+  readonly "daemon:upgrade": DaemonUpgradeResult;
 }
 
 export type ResponseOf<K extends RequestType> = ResponseMap[K];
