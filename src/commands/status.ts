@@ -1,13 +1,13 @@
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
-import p from "../../package.json";
 import { loadSettings } from "../config/settings.js";
 import type { Settings } from "../config/settings.js";
 import type { ResponseOf, StatusResult } from "../protocol.js";
 import { checkXrayVersion, MIN_XRAY_VERSION } from "../services/xray-updater.js";
 import { checkHandlerInfo } from "../utils/handler.js";
 import { callHelper } from "../utils/ipc.js";
+import { MASIR_VERSION } from "../version.js";
 import { runConnectivityChecks } from "./connectivity.js";
 
 const pad = (n: number): string => (n < 10 ? `0${n}` : `${n}`);
@@ -63,6 +63,7 @@ interface ResolvedDaemon {
   readonly privileged: boolean;
   readonly startedAt?: number;
   readonly uptimeMs?: number;
+  readonly version?: string;
 }
 
 interface ResolvedXray {
@@ -145,6 +146,7 @@ const resolveDaemon = (status: StatusResult | null, now: number): ResolvedDaemon
       running: true,
       startedAt: daemon.startedAt,
       uptimeMs: Math.max(0, now - daemon.startedAt),
+      version: daemon.version,
     };
   }
 
@@ -155,6 +157,7 @@ const resolveDaemon = (status: StatusResult | null, now: number): ResolvedDaemon
       pid: fallback.helperPid,
       privileged: fallback.helperEuid === 0,
       running: true,
+      version: fallback.version,
     };
   }
 
@@ -338,7 +341,8 @@ const buildStatusJson = (version: string, daemon: ResolvedDaemon, xray: Resolved
 export const renderStatusTree = (now = Date.now()): string => {
   const settings = loadSettings();
   const { daemon, xray } = resolveStatus(now);
-  return [formatDaemonTree(p.version, daemon), "", formatXrayTree(xray, settings, daemon.running)].join("\n");
+  const effectiveVersion = daemon.version || MASIR_VERSION;
+  return [formatDaemonTree(effectiveVersion, daemon), "", formatXrayTree(xray, settings, daemon.running)].join("\n");
 };
 
 export const statusCommand = defineCommand({
@@ -363,10 +367,11 @@ export const statusCommand = defineCommand({
     const now = Date.now();
     const { daemon, xray } = resolveStatus(now);
     const check = args.check !== false;
+    const effectiveVersion = daemon.version || MASIR_VERSION;
 
     if (args.json) {
       const connectivity = check ? await runConnectivityChecks(false) : undefined;
-      console.log(JSON.stringify({ ...buildStatusJson(p.version, daemon, xray, settings), connectivity }, null, 2));
+      console.log(JSON.stringify({ ...buildStatusJson(effectiveVersion, daemon, xray, settings), connectivity }, null, 2));
       return;
     }
 

@@ -1,9 +1,36 @@
 import { defineCommand } from "citty";
-import pc from "picocolors";
 
+import { updateMasir } from "../services/masir-updater.js";
 import { updateXrayCore } from "../services/xray-updater.js";
 import { setExitCode } from "../utils/exit-code.js";
-import { log } from "../utils/log.js";
+
+const updateMasirCommand = defineCommand({
+  args: {
+    force: {
+      alias: "f",
+      default: false,
+      description: "re-download even if already on the latest version",
+      type: "boolean",
+    },
+    proxy: {
+      alias: "x",
+      description: "download through the configured local mixed proxy port (--no-proxy to bypass)",
+      type: "boolean",
+    },
+  },
+  meta: {
+    alias: ["cli"],
+    description: "Update the masir binary to the latest release from GitHub",
+    name: "masir",
+  },
+  async run({ args }) {
+    const proxy = typeof args.proxy === "boolean" ? args.proxy : undefined;
+    const ok = await updateMasir({ force: Boolean(args.force), proxy });
+    if (!ok) {
+      setExitCode(1);
+    }
+  },
+});
 
 const updateXrayCommand = defineCommand({
   args: {
@@ -34,17 +61,37 @@ const updateXrayCommand = defineCommand({
 });
 
 export const updateCommand = defineCommand({
+  args: {
+    force: {
+      alias: "f",
+      default: false,
+      description: "re-download even if already on the latest version",
+      type: "boolean",
+    },
+    proxy: {
+      alias: "x",
+      description: "download through the configured local mixed proxy port (--no-proxy to bypass)",
+      type: "boolean",
+    },
+  },
   meta: {
-    description: "Update masir or xray-core (`masir update xray-core`)",
+    description: "Update masir binary or xray-core (`masir update` or `masir update xray-core`)",
     name: "update",
   },
-  run({ rawArgs }) {
-    if (rawArgs.length > 0) {
-      return;
+  async run({ args, rawArgs }) {
+    // If a subcommand like xray-core was passed, citty handles it.
+    // If bare `masir update` (or flags like `masir update -f`) was passed, update masir binary.
+    const hasSubcommand = rawArgs.some((arg) => arg === "xray-core" || arg === "xray" || arg === "masir" || arg === "cli");
+    if (!hasSubcommand) {
+      const proxy = typeof args.proxy === "boolean" ? args.proxy : undefined;
+      const ok = await updateMasir({ force: Boolean(args.force), proxy });
+      if (!ok) {
+        setExitCode(1);
+      }
     }
-    log.info(`Self-update for the masir binary is coming soon. To update Xray-core, run ${pc.bold("`masir update xray-core`")}.`);
   },
   subCommands: {
+    masir: updateMasirCommand,
     "xray-core": updateXrayCommand,
   },
 });

@@ -8,6 +8,47 @@ on:
   workflow_dispatch:
 
 jobs:
+  check-version:
+    name: Check Version
+    runs-on: ubuntu-24.04
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if version needs release
+        id: check
+        run: |
+          VERSION=$(jq -r .version package.json)
+          TAG="v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # If manually triggered by a tag push, always release
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # If pull request, do not release
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # If on main branch, check if git tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version detected: $TAG"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
@@ -51,17 +92,23 @@ jobs:
 
   release:
     name: Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [check-version, build]
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.check-version.outputs.tag }}
+          name: Release ${{ needs.check-version.outputs.tag }}
           files: dist/masir-*.tar.gz
           generate_release_notes: true

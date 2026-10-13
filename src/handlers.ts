@@ -15,6 +15,7 @@ import { runXray } from "./services/run-xray.js";
 import { resolveSyncTargets, syncSubscriptions } from "./services/subscription/daemon-sync.js";
 import { setActiveNode } from "./services/subscription/storage.js";
 import { xray } from "./services/xray.js";
+import { MASIR_VERSION } from "./version.js";
 
 const SHUTDOWN_DELAY_MS = 100;
 const daemonStartedAt = Date.now();
@@ -97,6 +98,7 @@ const status = async (ctx: RequestContext): Promise<StatusResult> => {
       pid: ctx.helperPid,
       privileged: ctx.helperEuid === 0,
       startedAt: daemonStartedAt,
+      version: MASIR_VERSION,
     },
     xray: {
       apiPort: running ? xray.getApiPort() : undefined,
@@ -181,6 +183,7 @@ const dispatch = async (request: Request, ctx: RequestContext): Promise<string> 
         helperPid: ctx.helperPid,
         peerUid: ctx.peerUid,
         startedAt: daemonStartedAt,
+        version: MASIR_VERSION,
       });
     }
     case "start": {

@@ -51,6 +51,7 @@ export interface InfoResult {
   readonly helperPid: number;
   readonly binaryMtime?: number;
   readonly startedAt?: number;
+  readonly version?: string;
 }
 
 export interface StatusResult {
@@ -59,6 +60,7 @@ export interface StatusResult {
     readonly euid: number;
     readonly privileged: boolean;
     readonly startedAt: number;
+    readonly version?: string;
   };
   readonly xray: {
     readonly running: boolean;

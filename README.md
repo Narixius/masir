@@ -47,7 +47,7 @@ Run `masir use --fastest` to connect to the fastest config.
 | `masir status`                 | Daemon, xray and a connectivity check (`--json` for scripts) |
 | `masir logs`                   | Follow xray's log                                            |
 | `masir get-config`             | Print the xray config masir generated                        |
-| `masir update xray-core`       | Download the latest xray                                     |
+| `masir update`                 | Update the masir binary (or `masir update xray-core`)        |
 
 ## Subscriptions
 

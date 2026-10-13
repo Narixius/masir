@@ -1,7 +1,17 @@
 import { existsSync } from "node:fs";
 
-import { installSystemdService, isSystemdServiceInstalled, uninstallSystemdService } from "./linux.js";
-import { installLaunchdService, isLaunchdServiceInstalled, uninstallLaunchdService } from "./macos.js";
+import {
+  installSystemdService,
+  isSystemdServiceInstalled,
+  SERVICE_BIN_PATH as LINUX_SERVICE_BIN,
+  uninstallSystemdService,
+} from "./linux.js";
+import {
+  installLaunchdService,
+  isLaunchdServiceInstalled,
+  SERVICE_BIN_PATH as MACOS_SERVICE_BIN,
+  uninstallLaunchdService,
+} from "./macos.js";
 
 /**
  * The daemon as an OS service: runs `masir daemon run` as root at boot, so TUN
@@ -27,6 +37,16 @@ export interface ServiceSpec {
 export const SYSTEM_SOCKET = "/var/run/masir.sock";
 
 export const isServiceSupported = (): boolean => process.platform === "darwin" || process.platform === "linux";
+
+export const getDaemonServiceBinPath = (): string | null => {
+  if (process.platform === "darwin") {
+    return MACOS_SERVICE_BIN;
+  }
+  if (process.platform === "linux") {
+    return LINUX_SERVICE_BIN;
+  }
+  return null;
+};
 
 export const isDaemonServiceInstalled = (): boolean => {
   if (process.platform === "darwin") {

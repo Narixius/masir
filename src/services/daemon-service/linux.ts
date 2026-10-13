@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 import type { EnvVar } from "./daemon-service.js";
 
 const UNIT_NAME = "masir.service";
-const BIN_PATH = "/usr/local/lib/masir/masir";
+export const SERVICE_BIN_PATH = "/usr/local/lib/masir/masir";
 const UNIT_PATH = "/etc/systemd/system/masir.service";
 const SOCKET_PATH = "/var/run/masir.sock";
 const EXECUTABLE_MODE = 0o755;
@@ -24,7 +24,7 @@ Description=masir daemon (runs as root so TUN mode needs no password)
 After=network.target
 
 [Service]
-ExecStart=${BIN_PATH} daemon run
+ExecStart=${SERVICE_BIN_PATH} daemon run
 ${envLines}
 Restart=always
 KillMode=control-group
@@ -44,10 +44,10 @@ const systemctl = (args: readonly string[]) => {
 export const isSystemdServiceInstalled = (): boolean => existsSync(UNIT_PATH);
 
 export const installSystemdService = (sourceBinary: string, env: readonly EnvVar[]): void => {
-  mkdirSync(dirname(BIN_PATH), { recursive: true });
-  rmSync(BIN_PATH, { force: true });
-  copyFileSync(sourceBinary, BIN_PATH);
-  chmodSync(BIN_PATH, EXECUTABLE_MODE);
+  mkdirSync(dirname(SERVICE_BIN_PATH), { recursive: true });
+  rmSync(SERVICE_BIN_PATH, { force: true });
+  copyFileSync(sourceBinary, SERVICE_BIN_PATH);
+  chmodSync(SERVICE_BIN_PATH, EXECUTABLE_MODE);
 
   writeFileSync(UNIT_PATH, renderSystemdUnit(env));
   systemctl(["daemon-reload"]);
@@ -62,7 +62,7 @@ export const uninstallSystemdService = (): void => {
   } catch {
     // Not installed or already stopped: keep going and remove the files.
   }
-  for (const path of [UNIT_PATH, BIN_PATH, SOCKET_PATH]) {
+  for (const path of [UNIT_PATH, SERVICE_BIN_PATH, SOCKET_PATH]) {
     rmSync(path, { force: true });
   }
   try {

@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 import type { EnvVar } from "./daemon-service.js";
 
 const LABEL = "com.masir.daemon";
-const BIN_PATH = "/Library/PrivilegedHelperTools/masir";
+export const SERVICE_BIN_PATH = "/Library/PrivilegedHelperTools/masir";
 const PLIST_PATH = "/Library/LaunchDaemons/com.masir.daemon.plist";
 const SOCKET_PATH = "/var/run/masir.sock";
 const LOG_PATH = "/var/log/masir-daemon.log";
@@ -21,7 +21,7 @@ export const renderLaunchdPlist = (env: readonly EnvVar[]): string => {
 <plist version="1.0"><dict>
   <key>Label</key><string>${LABEL}</string>
   <key>ProgramArguments</key><array>
-    <string>${xmlEscape(BIN_PATH)}</string><string>daemon</string><string>run</string>
+    <string>${xmlEscape(SERVICE_BIN_PATH)}</string><string>daemon</string><string>run</string>
   </array>
   <key>EnvironmentVariables</key><dict>
 ${envEntries}
@@ -42,11 +42,11 @@ export const installLaunchdService = (sourceBinary: string, env: readonly EnvVar
   // Drop any previous registration first; it is fine if there is none.
   launchctl(["bootout", `system/${LABEL}`], true);
 
-  mkdirSync(dirname(BIN_PATH), { recursive: true });
+  mkdirSync(dirname(SERVICE_BIN_PATH), { recursive: true });
   // Remove first so a previous (possibly replaced) file is never written through.
-  rmSync(BIN_PATH, { force: true });
-  copyFileSync(sourceBinary, BIN_PATH);
-  chmodSync(BIN_PATH, EXECUTABLE_MODE);
+  rmSync(SERVICE_BIN_PATH, { force: true });
+  copyFileSync(sourceBinary, SERVICE_BIN_PATH);
+  chmodSync(SERVICE_BIN_PATH, EXECUTABLE_MODE);
 
   writeFileSync(PLIST_PATH, renderLaunchdPlist(env));
   chmodSync(PLIST_PATH, PLIST_MODE);
@@ -59,7 +59,7 @@ export const installLaunchdService = (sourceBinary: string, env: readonly EnvVar
 
 export const uninstallLaunchdService = (): void => {
   launchctl(["bootout", `system/${LABEL}`], true);
-  for (const path of [PLIST_PATH, BIN_PATH, SOCKET_PATH]) {
+  for (const path of [PLIST_PATH, SERVICE_BIN_PATH, SOCKET_PATH]) {
     rmSync(path, { force: true });
   }
 };

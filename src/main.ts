@@ -20,6 +20,7 @@ import { subUseCommand } from "./commands/sub/use.js";
 import { updateCommand } from "./commands/update.js";
 import { getExitCode } from "./utils/exit-code.js";
 import { getAppDirs } from "./utils/fs.js";
+import { MASIR_VERSION } from "./version.js";
 
 // Under the app log dir, not cwd: the CLI runs from anywhere.
 const fs = createFsDrain({ dir: join(getAppDirs().log, "evlog") });
@@ -29,7 +30,7 @@ const masirCli = defineCommand({
   meta: {
     description: "A command-line client for xray-core: subscriptions, proxies and routing rules",
     name: "masir",
-    version: "0.1.0",
+    version: MASIR_VERSION,
   },
   subCommands: {
     status: statusCommand,
