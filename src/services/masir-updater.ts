@@ -8,7 +8,7 @@ import pc from "picocolors";
 import { loadSettings } from "../config/settings.js";
 import type { ResponseOf } from "../protocol.js";
 import { checkHandlerInfo, ensureHandlerIsReady } from "../utils/handler.js";
-import { tryCallHelper } from "../utils/ipc.js";
+import { callHelper, tryCallHelper } from "../utils/ipc.js";
 import { log } from "../utils/log.js";
 import { confirmPrompt } from "../utils/prompts.js";
 import { createSpinner } from "../utils/spinner.js";
@@ -186,7 +186,7 @@ const waitForDaemonShutdown = async (oldPid: number): Promise<void> => {
   }
 };
 
-const restartDaemonAfterUpdate = async (wasTun: boolean): Promise<void> => {
+const restartDaemonAfterUpdate = async (options: { readonly wasRunning: boolean; readonly wasTun: boolean }): Promise<void> => {
   const spinner = createSpinner();
   spinner.start("Restarting daemon with updated binary...");
   const info = checkHandlerInfo();
@@ -194,14 +194,28 @@ const restartDaemonAfterUpdate = async (wasTun: boolean): Promise<void> => {
     tryCallHelper<ResponseOf<"shutdown">>({ type: "shutdown" });
     await waitForDaemonShutdown(info.helperPid);
   }
-  const isPrivileged = wasTun || info?.helperEuid === 0;
+  const isPrivileged = options.wasTun || info?.helperEuid === 0;
   const ready = await ensureHandlerIsReady({ privileged: isPrivileged, spinner });
   if (!ready) {
     spinner.error(pc.red("Daemon restart failed after update."));
     return;
   }
   const newInfo = checkHandlerInfo();
-  spinner.stop(pc.green(`Daemon restarted successfully with updated binary (PID: ${newInfo?.helperPid ?? "unknown"}).`));
+  const daemonPid = newInfo?.helperPid ?? "unknown";
+
+  if (options.wasRunning) {
+    const modeLabel = options.wasTun ? "TUN mode" : "Proxy mode";
+    spinner.message(`Reconnecting Xray in ${modeLabel}...`);
+    const startRes = callHelper<ResponseOf<"start">>({ tun: options.wasTun, type: "start" });
+    if (!startRes.ok) {
+      spinner.error(pc.red(`Daemon restarted (PID: ${daemonPid}), but failed to reconnect Xray: ${startRes.error}`));
+      log.info(pc.dim("Inspect status with `masir status` or view logs with `masir logs`."));
+      return;
+    }
+    spinner.stop(pc.green(`Daemon restarted (PID: ${daemonPid}) and Xray reconnected in ${modeLabel}.`));
+  } else {
+    spinner.stop(pc.green(`Daemon restarted successfully with updated binary (PID: ${daemonPid}).`));
+  }
 };
 
 const installUpdatedBinaries = (newExePath: string, primaryTarget: string): void => {
@@ -284,7 +298,7 @@ export const updateMasir = async (options?: UpdateMasirOptions): Promise<boolean
   log.success(`${pc.green("✔")} masir updated to ${pc.bold(`v${release.version}`)}`);
 
   if (checkHandlerInfo()) {
-    await restartDaemonAfterUpdate(wasTun);
+    await restartDaemonAfterUpdate({ wasRunning: isXrayRunning, wasTun });
   }
 
   return true;
