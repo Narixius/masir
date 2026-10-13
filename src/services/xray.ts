@@ -13,6 +13,7 @@ import type { XrayMode, XrayState } from "../protocol.js";
 import { ensureDirExists, getAppDirs, writeFileEnsured } from "../utils/fs.js";
 import { LogBuffer } from "../utils/log-buffer.js";
 import { getFreePort } from "../utils/ports.js";
+import { saveDaemonState } from "./daemon-state.js";
 import { killProcessTree, makeLineReader, spawnGuardedXray, STOP_GRACE_MS, waitForExit, XRAY_PID_PREFIX } from "./xray-process.js";
 
 const STARTUP_TIMEOUT_MS = 3000;
@@ -172,6 +173,7 @@ export class Xray {
         this.startedAt = Date.now();
         const hasTun = Boolean(config.inbounds?.some((ib) => ib?.protocol === "tun"));
         this.mode = hasTun ? "tun" : "proxy";
+        saveDaemonState({ lastStartedAt: this.startedAt, mode: this.mode, running: true });
         const resolvedPid = this.xrayPid ?? this.process?.pid ?? 0;
         log.set({ pid: resolvedPid });
         log.emit();
@@ -271,6 +273,9 @@ export class Xray {
   getMode = () => this.mode;
   setMode = (mode: XrayMode) => {
     this.mode = mode;
+    if (this.isRunning()) {
+      saveDaemonState({ lastStartedAt: this.startedAt ?? Date.now(), mode: this.mode, running: true });
+    }
   };
   getLastError = () => this.lastError;
 
@@ -286,7 +291,7 @@ export class Xray {
     await waitForExit(pids, STOP_GRACE_MS);
   };
 
-  stopXray = () => {
+  stopXray = (options?: { readonly keepState?: boolean }) => {
     if (this.process) {
       killProcessTree(this.process, this.xrayPid);
       this.process = null;
@@ -294,6 +299,9 @@ export class Xray {
     this.xrayPid = null;
     this.state = "not-started";
     this.startedAt = null;
+    if (!options?.keepState) {
+      saveDaemonState({ mode: this.mode, running: false });
+    }
   };
 
   getVersion = (): Promise<string | null> => {

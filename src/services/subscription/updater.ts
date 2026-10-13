@@ -63,7 +63,7 @@ export const updateSubscription = async (name: string): Promise<UpdateSubscripti
       activeNodeStatus = connectionFingerprint(previousActive) === connectionFingerprint(exactNext) ? "unchanged" : "changed";
     } else if (outbounds.length > 0) {
       const prevIdx = current.outbounds.findIndex((ob) => ob.id === previousActive.id);
-      const closest = findClosestProxy(previousActive, outbounds, prevIdx !== -1 ? prevIdx : 0);
+      const closest = findClosestProxy(previousActive, outbounds, prevIdx === -1 ? 0 : prevIdx);
       if (closest) {
         if (closest.isStructureUpdate) {
           // Confidently the same server with new details: stay connected to it.

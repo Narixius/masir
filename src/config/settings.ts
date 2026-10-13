@@ -123,7 +123,7 @@ const defaults = {
   mixedPort: () => 7890,
   routingMode: (): RoutingMode => "proxy",
   subUpdateIntervalMinutes: () => 60,
-  tunDns: () => ["1.1.1.1", "8.8.8.8"],
+  tunDns: (): string[] => [],
   xrayAssetsPath: () => resolveAssetsPath(process.env["XRAY_LOCATION_ASSET"]),
   xrayExecutable: () => resolveXrayExecutable(),
 };
@@ -141,6 +141,7 @@ const port = z.int().check(z.gte(1), z.lte(65_535));
 const nonEmpty = z.string().check(z.minLength(1));
 const positiveInt = z.int().check(z.gte(1));
 const ipv4List = z.array(z.ipv4()).check(z.minLength(1));
+const optionalIpv4List = z.array(z.ipv4());
 
 const SettingsSchema = z.object({
   apiPort: withDefault("apiPort", port, defaults.apiPort),
@@ -150,7 +151,7 @@ const SettingsSchema = z.object({
   mixedPort: withDefault("mixedPort", port, defaults.mixedPort),
   routingMode: withDefault("routingMode", routingModeSchema, defaults.routingMode),
   subUpdateIntervalMinutes: withDefault("subUpdateIntervalMinutes", positiveInt, defaults.subUpdateIntervalMinutes),
-  tunDns: withDefault("tunDns", ipv4List, defaults.tunDns),
+  tunDns: withDefault("tunDns", optionalIpv4List, defaults.tunDns),
   xrayAssetsPath: withDefault("xrayAssetsPath", nonEmpty, defaults.xrayAssetsPath),
   xrayExecutable: withDefault("xrayExecutable", nonEmpty, defaults.xrayExecutable),
 });
@@ -175,14 +176,11 @@ export const readRawSettings = (): Record<string, unknown> => {
 
 export const loadSettings = (): Settings => {
   const raw = readRawSettings();
-  if (raw["tunDns"] === undefined && raw["dnsServers"] !== undefined) {
-    raw["tunDns"] = raw["dnsServers"];
-  }
   const parsed = z.parse(SettingsSchema, raw);
-  const effectiveTunDns = parsed.tunDns;
+  const effectiveTunDns = parsed.tunDns.length > 0 ? parsed.tunDns : parsed.dnsServers;
   return {
     ...parsed,
-    dnsServers: effectiveTunDns,
+    dnsServers: parsed.dnsServers,
     tunDns: effectiveTunDns,
     xrayExecutable: resolveXrayExecutable(parsed.xrayExecutable),
   };

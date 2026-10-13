@@ -28,12 +28,12 @@ Anywhere else: `masir settings set xrayExecutable /path/to/xray` and `masir sett
 ```console
 $ masir sub add https://example.com/sub    # add a subscription
 $ masir use                                # pick a proxy (latency shows live)
-$ masir connect                            # local proxy on 127.0.0.1:7890
+$ masir connect                            # routes the whole system (TUN mode)
 $ masir status                             # is everything working?
 $ masir disconnect
 ```
 
-`127.0.0.1:7890` speaks both HTTP and SOCKS5. Want the whole system instead? `masir connect --tun`. It asks for your password; run `masir daemon enable` once and it won't ask again.
+TUN mode routes the whole system by default. It asks for your password; run `masir daemon enable` once and it won't ask again. Prefer local proxy only (HTTP and SOCKS5 on `127.0.0.1:7890`)? Run `masir connect -p` (or `--proxy`).
 
 Run `masir use --fastest` to connect to the fastest config.
 
@@ -41,7 +41,7 @@ Run `masir use --fastest` to connect to the fastest config.
 
 | Command                        | What it does                                                 |
 | ------------------------------ | ------------------------------------------------------------ |
-| `masir connect` / `disconnect` | Start or stop (`--tun` for system-wide)                      |
+| `masir connect` / `disconnect` | Start or stop (default TUN; `-p` for proxy-only)             |
 | `masir use [--fastest]`        | Switch the active proxy                                      |
 | `masir mode [proxy\|direct]`   | What happens to traffic no rule matches                      |
 | `masir status`                 | Daemon, xray and a connectivity check (`--json` for scripts) |
@@ -108,7 +108,8 @@ Settings (all optional):
 | `mixedPort`                | `7890`                      | Local HTTP + SOCKS5 proxy port            |
 | `apiPort`                  | `10085`                     | xray's gRPC API port                      |
 | `dohDns`                   | `https://1.1.1.1/dns-query` | DNS-over-HTTPS server                     |
-| `tunDns`                   | `["1.1.1.1", "8.8.8.8"]`    | DNS servers in TUN mode                   |
+| `dnsServers`               | `["1.1.1.1", "8.8.8.8"]`    | DNS servers (used for bootstrap)          |
+| `tunDns`                   | falls back to `dnsServers`  | DNS servers in TUN mode                   |
 | `gateway`                  | `10.10.20.1/24`             | TUN interface address                     |
 | `subUpdateIntervalMinutes` | `60`                        | How often subscriptions refresh           |
 | `xrayExecutable`           | found automatically         | Path to the xray binary                   |

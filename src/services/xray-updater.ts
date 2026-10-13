@@ -218,7 +218,7 @@ const applyPostUpdateReload = (version: string, exePath: string, targetDir: stri
   );
 
   if (!serviceInstalled && before.running) {
-    const startCmd = before.tun ? "masir start -t" : "masir start";
+    const startCmd = before.tun ? "masir start" : "masir start -p";
     log.info(`Restart Xray to apply the new version: ${pc.bold(`\`masir stop && ${startCmd}\``)}`);
   }
 };

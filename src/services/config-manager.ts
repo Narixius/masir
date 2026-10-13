@@ -237,14 +237,16 @@ export const buildDnsSettings = (options: DesiredConfigOptions): NonNullable<Xra
       },
     ],
   };
-
-  if (domains.length) {
-    dns.servers?.push({
-      address: "1.1.1.1",
-      domains,
-      finalQuery: true,
-      tag: "dns-bootstrap",
-    });
+  // resolve config address dns through the dns servers
+  for (const dnsServer of options.settings.dnsServers) {
+    if (domains.length) {
+      dns.servers?.push({
+        address: dnsServer,
+        domains,
+        finalQuery: true,
+        tag: "dns-bootstrap",
+      });
+    }
   }
 
   return dns;
@@ -281,14 +283,12 @@ export const buildRoutingRules = (options: DesiredConfigOptions): XrayRoutingRul
     doh.isIp
       ? {
           ip: [doh.host],
-          network: "tcp",
           outboundTag: "proxy",
           port: doh.port,
           ruleTag: "dns-upstream",
         }
       : {
           domain: [doh.host],
-          network: "tcp",
           outboundTag: "proxy",
           port: doh.port,
           ruleTag: "dns-upstream",
@@ -417,7 +417,7 @@ export const reconcile = async (desiredConfig: XrayConfig, options: ReconcileOpt
         proxySettings: {
           type: "xray.proxy.tun.Config",
           value: {
-            DNS: options.settings.tunDns,
+            DNS: options.settings.tunDns.length ? options.settings.tunDns : options.settings.dnsServers,
             MTU: 1500,
             autoOutboundsInterface: "auto",
             autoSystemRoutingTable: ["0.0.0.0/0", "::/0"],

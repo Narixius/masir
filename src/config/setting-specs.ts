@@ -12,6 +12,7 @@ export type SettingKey =
   | "routingMode"
   | "dohDns"
   | "tunDns"
+  | "dnsServers"
   | "mixedPort"
   | "apiPort"
   | "xrayExecutable"
@@ -121,6 +122,13 @@ export const SETTINGS: readonly SettingSpec[] = [
     reloadsXray: true,
   },
   {
+    description: "DNS servers (IPv4, comma-separated)",
+    key: "dnsServers",
+    label: "DNS Servers",
+    parse: parseDnsServers,
+    reloadsXray: true,
+  },
+  {
     description: "DNS servers in TUN mode (IPv4, comma-separated)",
     key: "tunDns",
     label: "TUN DNS",
@@ -174,12 +182,9 @@ export const SETTINGS: readonly SettingSpec[] = [
   },
 ];
 
-/** The spec for `key`, accepting either spelling (`mixedPort`, `mixed-port`, `dnsServers` -> `tunDns`). */
+/** The spec for `key`, accepting either spelling (`mixedPort`, `mixed-port`). */
 export const findSetting = (key: string): SettingSpec | undefined => {
   const wanted = key.replaceAll("-", "").toLowerCase();
-  if (wanted === "dnsservers") {
-    return SETTINGS.find((spec) => spec.key === "tunDns");
-  }
   return SETTINGS.find((spec) => spec.key.toLowerCase() === wanted);
 };
 
@@ -191,6 +196,9 @@ export const formatSetting = (spec: SettingSpec, settings: Settings): string => 
     }
     case "dohDns": {
       return settings.dohDns;
+    }
+    case "dnsServers": {
+      return settings.dnsServers.join(", ");
     }
     case "tunDns": {
       return settings.tunDns.join(", ");

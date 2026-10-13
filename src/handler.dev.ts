@@ -15,7 +15,7 @@ import { killProbeXrayNow } from "./services/latency/probe-xray.js";
 import { installShutdownHooks, onShutdown } from "./services/shutdown.js";
 import { xray } from "./services/xray.js";
 
-onShutdown(xray.stopXray);
+onShutdown(() => xray.stopXray({ keepState: true }));
 onShutdown(killProbeXrayNow);
 installShutdownHooks();
 

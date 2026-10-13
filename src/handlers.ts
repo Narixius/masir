@@ -152,7 +152,7 @@ const useNode = async (id: string, subName?: string): Promise<ResponseOf<"sub:us
 const shutdown = (): ResponseOf<"shutdown"> => {
   // Lets the CLI replace this daemon (e.g. with a root one for TUN mode).
   // The delay gives the reply time to reach the client first.
-  xray.stopXray();
+  xray.stopXray({ keepState: true });
   setTimeout(() => process.exit(0), SHUTDOWN_DELAY_MS);
   return "daemon shutting down";
 };

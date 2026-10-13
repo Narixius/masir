@@ -63,57 +63,64 @@ const normalizeText = (text: string | undefined): string =>
 const containsWords = (outer: string, inner: string): boolean =>
   inner.length >= MIN_SUBSTRING_LENGTH && ` ${outer} `.includes(` ${inner} `);
 
-export const scoreProxyMatch = (previous: ManagedOutbound, candidate: ManagedOutbound, prevIndex: number, candIndex: number): number => {
+const scoreRemarks = (prevRemarks?: string, candRemarks?: string): number => {
+  const p = prevRemarks?.trim();
+  const c = candRemarks?.trim();
+  if (!p || !c) {
+    return 0;
+  }
   let score = 0;
-
-  // 1. Remarks matching
-  const prevRemarks = previous.remarks?.trim();
-  const candRemarks = candidate.remarks?.trim();
-  if (prevRemarks && candRemarks) {
-    if (prevRemarks === candRemarks) {
-      score += SCORE_EXACT_REMARKS;
-    } else {
-      const normPrev = normalizeText(prevRemarks);
-      const normCand = normalizeText(candRemarks);
-      if (normPrev.length > 0 && normPrev === normCand) {
-        score += SCORE_NORMALIZED_REMARKS;
-      } else if (containsWords(normCand, normPrev) || containsWords(normPrev, normCand)) {
-        score += SCORE_SUBSTRING_REMARKS;
-      }
-    }
-
-    const prevFlag = extractFlag(prevRemarks);
-    const candFlag = extractFlag(candRemarks);
-    if (prevFlag && candFlag && prevFlag === candFlag) {
-      score += SCORE_FLAG;
+  if (p === c) {
+    score += SCORE_EXACT_REMARKS;
+  } else {
+    const normPrev = normalizeText(p);
+    const normCand = normalizeText(c);
+    if (normPrev.length > 0 && normPrev === normCand) {
+      score += SCORE_NORMALIZED_REMARKS;
+    } else if (containsWords(normCand, normPrev) || containsWords(normPrev, normCand)) {
+      score += SCORE_SUBSTRING_REMARKS;
     }
   }
 
-  // 2. Server address matching
+  const prevFlag = extractFlag(p);
+  const candFlag = extractFlag(c);
+  if (prevFlag && candFlag && prevFlag === candFlag) {
+    score += SCORE_FLAG;
+  }
+  return score;
+};
+
+const scoreAddress = (previous: ManagedOutbound, candidate: ManagedOutbound): number => {
   const prevAddr = serverAddress(previous);
   const candAddr = serverAddress(candidate);
   const prevHost = extractHost(prevAddr);
   const candHost = extractHost(candAddr);
-  if (prevHost && candHost && prevHost === candHost) {
-    score += SCORE_EXACT_HOST;
-    const prevPort = extractPort(prevAddr);
-    const candPort = extractPort(candAddr);
-    if (prevPort !== undefined && candPort !== undefined && prevPort === candPort) {
-      score += SCORE_EXACT_PORT;
-    }
+  if (!prevHost || !candHost || prevHost !== candHost) {
+    return 0;
   }
+  let score = SCORE_EXACT_HOST;
+  const prevPort = extractPort(prevAddr);
+  const candPort = extractPort(candAddr);
+  if (prevPort !== undefined && candPort !== undefined && prevPort === candPort) {
+    score += SCORE_EXACT_PORT;
+  }
+  return score;
+};
 
-  // 3. Tag matching (if not generic)
+export const scoreProxyMatch = (previous: ManagedOutbound, candidate: ManagedOutbound, prevIndex: number, candIndex: number): number => {
+  let score = scoreRemarks(previous.remarks, candidate.remarks) + scoreAddress(previous, candidate);
+
+  // Tag matching (if not generic)
   if (!isGenericTag(previous.tag) && !isGenericTag(candidate.tag) && previous.tag === candidate.tag) {
     score += SCORE_TAG;
   }
 
-  // 4. Protocol matching
+  // Protocol matching
   if (previous.protocol === candidate.protocol) {
     score += SCORE_PROTOCOL;
   }
 
-  // 5. Index proximity (up to 20 points)
+  // Index proximity (up to 20 points)
   score += Math.max(0, 20 - Math.abs(candIndex - prevIndex));
 
   return score;
@@ -124,7 +131,7 @@ export const findClosestProxy = (
   candidates: readonly ManagedOutbound[],
   prevIndex = 0
 ): ProxyMatchResult | undefined => {
-  const first = candidates[0];
+  const [first] = candidates;
   if (!first) {
     return undefined;
   }

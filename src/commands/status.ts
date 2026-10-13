@@ -237,6 +237,7 @@ const formatXrayRunning = (xray: ResolvedXray, settings: Settings): string => {
     `${pc.bold("Proxy Port:")} ${pc.bold(String(settings.mixedPort))} ${pc.dim("(Socks5/HTTP)")}`,
     `${pc.bold("API Port:")} ${pc.bold(String(xray.apiPort ?? settings.apiPort))} ${pc.dim("(xray-core gRPC)")}`,
     `${pc.bold("DoH DNS:")} ${pc.bold(settings.dohDns)}`,
+    `${pc.bold("DNS Servers:")} ${pc.bold(settings.dnsServers.join(", "))}`,
     `${pc.bold("TUN DNS:")} ${pc.bold(settings.tunDns.join(", "))}`,
   ];
 
@@ -277,12 +278,12 @@ const formatXrayInactive = (xray: ResolvedXray, settings: Settings, daemonRunnin
     const items = [
       formatRoutingMode(settings),
       `${pc.bold("Ports:")} Mixed ${pc.bold(String(settings.mixedPort))}, API ${pc.bold(String(settings.apiPort))}`,
-      `${pc.bold("DNS:")} DoH ${pc.bold(settings.dohDns)}, TUN ${pc.bold(settings.tunDns.join(", "))}`,
+      `${pc.bold("DNS:")} DoH ${pc.bold(settings.dohDns)}, DNS ${pc.bold(settings.dnsServers.join(", "))}, TUN ${pc.bold(settings.tunDns.join(", "))}`,
     ];
     if (versionHint) {
       items.push(versionHint);
     }
-    items.push(`${pc.bold("Hint:")} Connect with \`masir connect\` (or \`masir connect --tun\` for the whole system)`);
+    items.push(`${pc.bold("Hint:")} Connect with \`masir connect\` (or \`masir connect -p\` for proxy-only mode)`);
     return renderTree(`${title} ${pc.yellow("○")} ${pc.yellow("Inactive")} ${pc.dim("(stopped)")}`, items);
   }
   return renderTree(`${title} ${pc.dim(`○ Inactive (daemon inactive)`)}`, versionHint ? [versionHint] : []);
@@ -307,7 +308,7 @@ const buildStatusJson = (version: string, daemon: ResolvedDaemon, xray: Resolved
   },
   settings: {
     apiPort: settings.apiPort,
-    dnsServers: settings.tunDns,
+    dnsServers: settings.dnsServers,
     dohDns: settings.dohDns,
     mixedPort: settings.mixedPort,
     routingMode: settings.routingMode,

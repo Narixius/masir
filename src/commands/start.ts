@@ -17,17 +17,23 @@ export const startCommand = defineCommand({
       description: "custom path to directory containing geodata files (geoip.dat, geosite.dat)",
       type: "string",
     },
+    proxy: {
+      alias: "p",
+      default: false,
+      description: "start proxy mode only (HTTP/SOCKS5, does not route whole system)",
+      type: "boolean",
+    },
     tun: {
       alias: "t",
-      default: false,
-      description: "enable tun mode (runs the daemon as root; asks for your password)",
+      default: true,
+      description: "enable TUN mode (default; routes whole system)",
       type: "boolean",
     },
   },
   meta: {
-    description: "Connect: start xray with the active proxy (--tun routes the whole system)",
-    name: "connect",
     alias: ["start"],
+    description: "Connect: start xray with the active proxy (routes whole system by default; -p for proxy-only)",
+    name: "connect",
   },
   async run({ args }) {
     if (args.assets) {
@@ -39,7 +45,7 @@ export const startCommand = defineCommand({
       process.exit(1);
     }
 
-    const isTun = Boolean(args.tun);
+    const isTun = !args.proxy && Boolean(args.tun);
     const spinner = createSpinner();
     spinner.start(isTun ? "Preparing TUN mode..." : "Preparing Proxy mode...");
 

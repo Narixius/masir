@@ -1,9 +1,12 @@
 import { defineCommand } from "citty";
+import { createLogger } from "evlog";
 
 import { fromNativeCode, nativeErrorName } from "../../errors.js";
 import { respond } from "../../handlers.js";
 import { nativeTransport } from "../../native.js";
+import { loadDaemonState } from "../../services/daemon-state.js";
 import { killProbeXrayNow } from "../../services/latency/probe-xray.js";
+import { runXray } from "../../services/run-xray.js";
 import { installShutdownHooks, onShutdown } from "../../services/shutdown.js";
 import { startSubscriptionSyncDaemon } from "../../services/subscription/daemon-sync.js";
 import { xray } from "../../services/xray.js";
@@ -25,7 +28,7 @@ export const runDaemonCommand = defineCommand({
     name: "run",
   },
   run() {
-    onShutdown(xray.stopXray);
+    onShutdown(() => xray.stopXray({ keepState: true }));
     onShutdown(killProbeXrayNow);
     installShutdownHooks();
     const rc = nativeTransport.serve((conn, peerUid, request) => {
@@ -47,5 +50,20 @@ export const runDaemonCommand = defineCommand({
     }
 
     startSubscriptionSyncDaemon();
+
+    const savedState = loadDaemonState();
+    if (savedState.running) {
+      const isTun = savedState.mode !== "proxy";
+      const log = createLogger({ mode: isTun ? "tun" : "proxy", operation: "daemon.auto-resume" });
+      log.info("Auto-restarting Xray from saved daemon state...");
+      void runXray({ tun: isTun })
+        .then(() => {
+          log.emit();
+        })
+        .catch((error) => {
+          log.error(`Failed to auto-restart Xray: ${error instanceof Error ? error.message : String(error)}`);
+          log.emit();
+        });
+    }
   },
 });

@@ -58,7 +58,7 @@ If something silently does nothing in the binary, log the error a `catch` is swa
 
 ## Privileges and sockets
 
-The daemon runs as your user. TUN mode needs root: `masir connect --tun` restarts the daemon through `sudo`, and `masir daemon enable` sets it up as a launchd/systemd service instead. A root daemon only serves the user it was started for.
+The daemon runs as your user. TUN mode needs root: `masir connect` restarts the daemon through `sudo` (or use `-p`/`--proxy` for unprivileged proxy-only mode), and `masir daemon enable` sets it up as a launchd/systemd service instead. A root daemon only serves the user it was started for.
 
 The socket is `$TMPDIR/masir-<uid>.sock` on macOS, `/tmp/masir-<uid>/masir.sock` on Linux, or `/var/run/masir.sock` for a root daemon. `MASIR_SOCKET` overrides it; keep it under 104 bytes on macOS.
 
