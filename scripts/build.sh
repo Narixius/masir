@@ -24,6 +24,15 @@ if [[ "$(uname -s)" == "Linux" ]]; then
   ' "$MANIFEST"
 fi
 
+# Ensure scriptc toolchain binaries have executable permissions (required on CI
+# when pnpm restores from cache or skips scriptc postinstall).
+if [[ -f node_modules/scriptc/scripts/install-native.mjs ]]; then
+  node node_modules/scriptc/scripts/install-native.mjs || true
+fi
+find node_modules -path "*/@scriptc*/dist/lib/typescript/lib/tsc" -exec chmod +x {} + 2>/dev/null || true
+find node_modules -path "*/@scriptc*/dist/lib/scriptc-comptime" -exec chmod +x {} + 2>/dev/null || true
+find node_modules -path "*/@scriptc*/dist/lib/llvm/bin/*" -exec chmod +x {} + 2>/dev/null || true
+
 mkdir -p dist
 echo "==> scriptc build src/main.ts ($MANIFEST)"
 pnpm exec scriptc build src/main.ts --ffi "$MANIFEST" --dynamic --strip --no-keep-llvm -o dist/masir

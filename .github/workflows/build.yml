@@ -101,6 +101,7 @@ jobs:
         run: |
           # scriptc comes from node_modules (a devDependency). pnpm-lock.yaml is not committed, so resolve fresh.
           pnpm install --no-frozen-lockfile
+          node node_modules/scriptc/scripts/install-native.mjs || true
           PROFILE=release scripts/build-native.sh
           scripts/build.sh
 
