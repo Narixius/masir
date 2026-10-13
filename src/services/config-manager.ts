@@ -109,7 +109,10 @@ export const buildDefaultOutbounds = (activeOutbound: XrayOutbound, extraOutboun
     {
       tag: "dns-out",
       protocol: "dns",
-      settings: {},
+      settings: {
+        // hijack A and AAAA, direct other queries
+        rules: [{ action: "hijack", qType: "1,28" }, { action: "direct" }],
+      },
       streamSettings: {
         sockopt: {
           dialerProxy: "loopback-dns",

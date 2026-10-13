@@ -22,7 +22,7 @@
     "@bufbuild/protobuf": "^2.16.0",
     "@clack/core": "^1.5.1",
     "@clack/prompts": "^1.8.1",
-    "@gozargah/xray-schema": "^0.0.27",
+    "@gozargah/xray-schema": "^0.0.30",
     "@grpc/grpc-js": "^1.14.5",
     "citty": "^0.2.2",
     "env-paths": "^4.0.0",
